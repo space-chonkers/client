@@ -31,3 +31,22 @@ body,
 .cube-scene canvas {
   display: block;
 }
+
+.player-sandbox,
+.player-sandbox__canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.player-sandbox__backpack {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}
