@@ -8,7 +8,7 @@
 
 ### Scope
 
-Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene) with a "Back to home" button. The chosen mode is not used by the sandbox yet.
+Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene) with a "Back to home" button. The chosen mode is not used by the sandbox yet, except that **Solo** fires a test hazard warning (see `docs/hazard_alert.md`).
 
 ## 1. Architecture
 
@@ -16,7 +16,7 @@ Includes the scene, the controllable character, the mode menu, the music control
 public/
 └── favicon.svg                 # Tab icon: the junior astronaut
 src/
-├── App.tsx                     # Selected mode state + app-wide music
+├── App.tsx                     # Selected mode state, app-wide music and hazard alert
 ├── style.css                   # Global base styles + mission screen
 ├── ui/
 │   ├── theme.css               # JAM palette tokens and font (.home-screen, .mission-screen)
@@ -75,6 +75,7 @@ src/
 ### Modes
 
 - Solo: 1 player. Co-op: up to 4 players (stated in each button's accessible label).
+- Picking **Solo** also sends a random hazard code (1–4) to `useHazardAlert` as a temporary test trigger. "Back to home" calls `dismiss()`, which clears the banner and the "in progress" label and stops the alarm.
 - Nothing is persisted (no saves, volume or mode).
 
 ## 4. Dependencies
