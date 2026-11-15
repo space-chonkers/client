@@ -12,7 +12,7 @@ export type ConstructionEventIconType = 'build' | 'expand' | 'collect'
 export type GameIconType = PoolResourceIconType | ConstructionEventIconType
 
 /**
- * Archivos PNG con fondo transparente para usarse en UI o como texturas en Three.js.
+ * Transparent PNG asset URLs for UI rendering or Three.js texture loading.
  */
 export const ICON_PNG_URLS: Record<GameIconType, string> = {
   oxygen: new URL('./oxygen.png', import.meta.url).href,

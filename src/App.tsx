@@ -1,9 +1,9 @@
-import SpinningCube from './SpinningCube'
+import PlayerSandboxView from './PlayerSandboxView'
 
 export default function App() {
   return (
     <main className="game-client">
-      <SpinningCube />
+      <PlayerSandboxView />
     </main>
   )
 }
