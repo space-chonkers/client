@@ -2,13 +2,17 @@ import * as THREE from 'three'
 import { buildStrata, type StrataLayer } from './formations'
 import { FacetBuilder, merge, painted, placement, UP } from './geometry'
 import { createRng, hash, hash01, type Rng } from './noise'
-import { PALETTE, materials } from './palette'
+import { materials } from './palette'
+import type { MineralFeature } from './reliefMap'
 import { createMartianRockGeometry } from './rocks'
 
 /**
  * Mineral deposits modelled on minerals documented on Mars, stylised and
  * exaggerated in size so they read from a gameplay camera. Visual concepts
- * only: no resource economics, just a `userData.kind` tag.
+ * only: no resource economics, just a `userData.kind` tag. Where a deposit
+ * appears is decided separately by the distribution rules in
+ * `mineralDistribution.ts`; procedurally placed deposits are game dressing,
+ * not claims about real Martian locations.
  *
  * - hematite: grey hematite concretions ("blueberries") weathering out of
  *   light sulfate-rich sandstone, as Opportunity found at Meridiani Planum.
@@ -22,8 +26,51 @@ import { createMartianRockGeometry } from './rocks'
  * Each deposit is a group of a matte host mesh and a `materials.mineral()`
  * mesh flagged `userData.exposed`, which placement keeps above the terrain.
  */
-export const MINERAL_KINDS = ['hematite', 'gypsum', 'olivine', 'sulfur'] as const
-export type MineralKind = (typeof MINERAL_KINDS)[number]
+
+interface MineralAppearance {
+  /** The mineral itself: grains, concretions, veins or crystals. */
+  mineral: readonly string[]
+  /** Rock the mineral sits in. */
+  host: readonly string[]
+  /** Loose sand the deposit rests in, when it has one. */
+  sand?: string
+  /** Ground stain around a placed deposit that makes it legible from the map view. */
+  halo: { color: string; amount: number }
+}
+
+/**
+ * Visual definition of each mineral family (sRGB hex). Minerals keep their
+ * real visible colours, slightly pushed so they read against the rust
+ * terrain, and never glow. They are kept out of the shared landscape palette
+ * (`palette.ts`) because they belong to the mineral, not to the landscape.
+ */
+export const MINERAL_APPEARANCE = {
+  /** Hematite concretions ("blueberries", Meridiani Planum): dark steel-grey in light, sulfate-rich sandstone (Burns formation). */
+  hematite: {
+    mineral: ['#4c5059', '#5f6470', '#3a3d45'],
+    host: ['#d9a374', '#c98d61', '#e4b88a', '#a9654a'],
+    halo: { color: '#6e4a4f', amount: 0.5 },
+  },
+  /** Calcium-sulfate (gypsum) veins, e.g. "Homestake": off-white to cream, through darker fractured bedrock. */
+  gypsum: {
+    mineral: ['#f4eedf', '#e7dcc4', '#fbf7ee'],
+    host: ['#9d4c3a', '#b05a40', '#8a4234'],
+    halo: { color: '#f1dcc0', amount: 0.55 },
+  },
+  /** Olivine grains: muted olive, not emerald, in charcoal-brown basalt on dark basaltic sand. */
+  olivine: {
+    mineral: ['#7a8a40', '#8f9c4f', '#65722f'],
+    host: ['#3e3833', '#4a423b', '#332f2c'],
+    sand: '#5c4438',
+    halo: { color: '#6a4a3c', amount: 0.42 },
+  },
+  /** Elemental sulfur (Gediz Vallis, 2024): muted yellow in pale, crushed host rock. */
+  sulfur: {
+    mineral: ['#d8c35c', '#c6ab42', '#eadb8f'],
+    host: ['#dcbc94', '#cba37a', '#e6cba6'],
+    halo: { color: '#e6cf86', amount: 0.6 },
+  },
+} as const satisfies Record<MineralFeature, MineralAppearance>
 
 export interface MineralOptions {
   seed: number
@@ -59,7 +106,7 @@ function speckle(geometry: THREE.BufferGeometry, seed: number, share: number, pa
   return geometry
 }
 
-function deposit(kind: MineralKind, host: THREE.BufferGeometry[], minerals: THREE.BufferGeometry[], size: number): THREE.Group {
+function deposit(kind: MineralFeature, host: THREE.BufferGeometry[], minerals: THREE.BufferGeometry[], size: number): THREE.Group {
   const group = new THREE.Group()
   group.name = `${kind}-deposit`
   group.userData.kind = `mineral:${kind}`
@@ -89,8 +136,8 @@ function outcrop(rng: Rng, seed: number, beds: { height: number; radius: number;
 /** Grey hematite "blueberries" weathering out of pale sandstone, with a lag of loose spheres around it. */
 export function createHematiteDeposit({ seed, size = 1 }: MineralOptions): THREE.Group {
   const rng = createRng(hash(seed, 0x4e3a))
-  const host = tones(PALETTE.hematiteHost)
-  const grey = tones(PALETTE.hematite)
+  const host = tones(MINERAL_APPEARANCE.hematite.host)
+  const grey = tones(MINERAL_APPEARANCE.hematite.mineral)
   const stretch: [number, number] = [rng.range(1.05, 1.25), rng.range(0.82, 0.95)]
   // The middle bed is the darker, iron-stained one.
   const { geometry, top } = outcrop(
@@ -133,8 +180,8 @@ export function createHematiteDeposit({ seed, size = 1 }: MineralOptions): THREE
 /** Fractured bedrock pavement cut by bright, slightly protruding gypsum veins. */
 export function createGypsumDeposit({ seed, size = 1 }: MineralOptions): THREE.Group {
   const rng = createRng(hash(seed, 0x6795))
-  const host = tones(PALETTE.gypsumHost)
-  const white = tones(PALETTE.gypsum)
+  const host = tones(MINERAL_APPEARANCE.gypsum.host)
+  const white = tones(MINERAL_APPEARANCE.gypsum.mineral)
   const { geometry, top } = outcrop(
     rng,
     hash(seed, 2),
@@ -180,7 +227,7 @@ export function createGypsumDeposit({ seed, size = 1 }: MineralOptions): THREE.G
   // Fracture debris and broken vein chips.
   for (let n = rng.int(2, 3); n > 0; n--) {
     const angle = rng.range(0, Math.PI * 2)
-    const rock = createMartianRockGeometry({ seed: hash(seed, n, 0x6d), scale: rng.range(0.12, 0.18), variant: 'angular', palette: PALETTE.gypsumHost })
+    const rock = createMartianRockGeometry({ seed: hash(seed, n, 0x6d), scale: rng.range(0.12, 0.18), variant: 'angular', palette: MINERAL_APPEARANCE.gypsum.host })
     hostParts.push(rock.translate(Math.cos(angle) * rng.range(0.42, 0.55), -0.01, Math.sin(angle) * rng.range(0.4, 0.5)))
   }
   for (let n = rng.int(6, 8); n > 0; n--) {
@@ -224,8 +271,8 @@ function sandDrift(rng: Rng, color: THREE.Color) {
 /** Angular dark basalt on a drift of basaltic sand, flecked with olive-green olivine. */
 export function createOlivineDeposit({ seed, size = 1 }: MineralOptions): THREE.Group {
   const rng = createRng(hash(seed, 0x011e))
-  const olive = tones(PALETTE.olivine)
-  const drift = sandDrift(rng, new THREE.Color(PALETTE.basaltSand))
+  const olive = tones(MINERAL_APPEARANCE.olivine.mineral)
+  const drift = sandDrift(rng, new THREE.Color(MINERAL_APPEARANCE.olivine.sand))
   const hostParts = [drift.geometry]
   const start = rng.range(0, Math.PI * 2)
   const rocks = rng.int(3, 4)
@@ -236,7 +283,7 @@ export function createOlivineDeposit({ seed, size = 1 }: MineralOptions): THREE.
       seed: hash(seed, k, 0xba5),
       scale: k === 0 ? rng.range(0.5, 0.6) : rng.range(0.26, 0.36),
       variant: 'angular',
-      palette: PALETTE.basalt,
+      palette: MINERAL_APPEARANCE.olivine.host,
     })
     // Phenocrysts: olive facets on the dark basalt; rocks sit in the drift.
     const y = drift.heightAt(distance) - 0.03
@@ -256,7 +303,7 @@ export function createOlivineDeposit({ seed, size = 1 }: MineralOptions): THREE.
 /** A pale rock cracked open around a nest of muted-yellow sulfur crystals. */
 export function createSulfurDeposit({ seed, size = 1 }: MineralOptions): THREE.Group {
   const rng = createRng(hash(seed, 0x5f))
-  const yellow = tones(PALETTE.sulfur)
+  const yellow = tones(MINERAL_APPEARANCE.sulfur.mineral)
   const hostParts: THREE.BufferGeometry[] = []
   const pieces = rng.int(4, 5)
   const start = rng.range(0, Math.PI * 2)
@@ -264,7 +311,7 @@ export function createSulfurDeposit({ seed, size = 1 }: MineralOptions): THREE.G
     // Fragments of one crushed rock, pushed apart and tipped outward.
     const angle = start + (k / pieces) * Math.PI * 2 + rng.range(-0.3, 0.3)
     const distance = rng.range(0.24, 0.3)
-    const rock = createMartianRockGeometry({ seed: hash(seed, k, 0x5f0), scale: rng.range(0.28, 0.36), variant: 'angular', palette: PALETTE.sulfurHost })
+    const rock = createMartianRockGeometry({ seed: hash(seed, k, 0x5f0), scale: rng.range(0.28, 0.36), variant: 'angular', palette: MINERAL_APPEARANCE.sulfur.host })
     rock.rotateZ(Math.cos(angle) * -0.3).rotateX(Math.sin(angle) * 0.3)
     hostParts.push(rock.translate(Math.cos(angle) * distance, -0.02, Math.sin(angle) * distance))
   }
@@ -286,13 +333,13 @@ export function createSulfurDeposit({ seed, size = 1 }: MineralOptions): THREE.G
   return deposit('sulfur', hostParts, crystals, size)
 }
 
-const FACTORIES: Record<MineralKind, (options: MineralOptions) => THREE.Group> = {
+const FACTORIES: Record<MineralFeature, (options: MineralOptions) => THREE.Group> = {
   hematite: createHematiteDeposit,
   gypsum: createGypsumDeposit,
   olivine: createOlivineDeposit,
   sulfur: createSulfurDeposit,
 }
 
-export function createMineralDeposit(kind: MineralKind, options: MineralOptions): THREE.Group {
+export function createMineralDeposit(kind: MineralFeature, options: MineralOptions): THREE.Group {
   return FACTORIES[kind](options)
 }

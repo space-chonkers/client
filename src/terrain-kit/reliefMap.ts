@@ -1,3 +1,4 @@
+import { DEFAULT_MINERAL_RULES, type MineralRule } from './mineralDistribution'
 import { clamp, createNoise2D, createRng, fbm, hash, smoothstep, type Rng } from './noise'
 
 /**
@@ -87,15 +88,21 @@ export interface ReliefMap {
   readonly craters: readonly Crater[]
 }
 
+/**
+ * Generation inputs beyond seed and size. Every option has a default, so a
+ * map can override only what differs (for example a mineral composition).
+ */
+export interface ReliefMapOptions {
+  /** Mineral distribution rules; defaults to {@link DEFAULT_MINERAL_RULES}. */
+  mineralRules?: readonly MineralRule[]
+}
+
 /** Cell lookup with edge clamping, so neighbourhood queries never fall off the map. */
 export function cellAt(map: ReliefMap, col: number, row: number): TerrainCell {
   const c = clamp(col, 0, map.cols - 1)
   const r = clamp(row, 0, map.rows - 1)
   return map.cells[r * map.cols + c]
 }
-
-export const isMineral = (feature: TerrainFeature): feature is MineralFeature =>
-  (MINERAL_FEATURES as readonly string[]).includes(feature)
 
 /** Features that occupy most of a cell and need breathing room around them. */
 const LARGE_FEATURES: ReadonlySet<TerrainFeature> = new Set(['butte', 'pillar', 'mesa', ...MINERAL_FEATURES])
@@ -437,11 +444,6 @@ export function generateLandforms(seed: number, cols: number, rows: number): { r
   return { relief: relief.map((v) => round2(clamp(v, -1, 1))), craters }
 }
 
-/** Relief values only; see {@link generateLandforms}. */
-export function generateRelief(seed: number, cols: number, rows: number): number[] {
-  return generateLandforms(seed, cols, rows).relief
-}
-
 // ---------------------------------------------------------------------------
 // Classification
 
@@ -457,6 +459,7 @@ export function createReliefMap(
   rows: number,
   relief: readonly number[],
   craters: readonly Crater[] = [],
+  { mineralRules = DEFAULT_MINERAL_RULES }: ReliefMapOptions = {},
 ): ReliefMap {
   const value = (col: number, row: number) => relief[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)]
   const rng = createRng(hash(seed, 0xfea))
@@ -499,7 +502,7 @@ export function createReliefMap(
   const features: TerrainFeature[] = measured.map((cell, index) =>
     baseFeature(cell, nearest[index], nearScarp[index], value, fbm(cluster, cell.col * 0.18, cell.row * 0.18, 2), rng.next(), rng.next()),
   )
-  placeMinerals(measured, nearest, features, cols, rng)
+  placeMinerals(measured, nearest, features, cols, rng, mineralRules)
 
   // Large formations need a free ring of cells, otherwise they read as a pile.
   for (let index = 0; index < features.length; index++) {
@@ -516,9 +519,9 @@ export function createReliefMap(
 }
 
 /** Generated relief + classification in one call. */
-export function generateReliefMap(seed: number, cols = MAP_SIZE, rows = MAP_SIZE): ReliefMap {
+export function generateReliefMap(seed: number, cols = MAP_SIZE, rows = MAP_SIZE, options: ReliefMapOptions = {}): ReliefMap {
   const { relief, craters } = generateLandforms(seed, cols, rows)
-  return createReliefMap(seed, cols, rows, relief, craters)
+  return createReliefMap(seed, cols, rows, relief, craters, options)
 }
 
 interface CraterHit {
@@ -706,62 +709,16 @@ function baseFeature(
   }
 }
 
-/**
- * Where each mineral family may occur, loosely following where rovers found it:
- * hematite concretions in sedimentary plains and basin margins; gypsum veins
- * cutting flat-lying lakebed mudstone (as in Gale crater) and infilled crater
- * floors; olivine in basaltic plains and fresh crater floors;
- * sulfur, rare, on flat basin or crater floors like a channel floor. Deposits
- * need fairly even ground, and the same family keeps its distance so finds
- * stay scattered. Fewer, larger deposits read better than many small ones.
- */
-const MINERAL_RULES: {
-  feature: MineralFeature
-  where: (geology: Geology, region: Region, kind: CraterKind | undefined) => boolean
-  chance: number
-  spacing: number
-  maxSlope: number
-}[] = [
-  {
-    feature: 'hematite',
-    where: (g, r) => (g === 'sediment' && r !== 'highlands') || (g === 'plain' && r === 'plains'),
-    chance: 0.03,
-    spacing: 7,
-    maxSlope: 0.2,
-  },
-  {
-    feature: 'gypsum',
-    where: (g, r, k) => (r === 'basin' && (g === 'basin' || g === 'sediment')) || (g === 'crater' && k === 'eroded'),
-    chance: 0.035,
-    spacing: 7,
-    maxSlope: 0.14,
-  },
-  {
-    // Dune fields are basaltic too, but their ridges are no ground for a deposit.
-    feature: 'olivine',
-    where: (g, r, k) => (r === 'volcanic' && g === 'plain') || (g === 'crater' && k === 'fresh'),
-    chance: 0.035,
-    spacing: 7,
-    maxSlope: 0.2,
-  },
-  {
-    feature: 'sulfur',
-    where: (g, r) => (r === 'basin' && g === 'basin') || g === 'crater',
-    chance: 0.02,
-    spacing: 12,
-    maxSlope: 0.12,
-  },
-]
-
 function placeMinerals(
   measured: readonly { col: number; row: number; slope: number; geology: Geology; region: Region }[],
   nearest: readonly (CraterHit | null)[],
   features: TerrainFeature[],
   cols: number,
   rng: Rng,
+  rules: readonly MineralRule[],
 ) {
   const order = shuffle(measured.map((_, index) => index), rng)
-  for (const rule of MINERAL_RULES) {
+  for (const rule of rules) {
     for (const index of order) {
       const cell = measured[index]
       if (!rule.where(cell.geology, cell.region, nearest[index]?.crater.kind) || cell.slope > rule.maxSlope || !rng.chance(rule.chance)) continue

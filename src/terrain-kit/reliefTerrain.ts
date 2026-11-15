@@ -2,17 +2,18 @@ import * as THREE from 'three'
 import { disposeObject } from './dispose'
 import { createMesa, createRockPillar, createSedimentaryFormation } from './formations'
 import { bakeStaticMeshes } from './geometry'
-import { createMineralDeposit } from './minerals'
+import { MINERAL_APPEARANCE, createMineralDeposit } from './minerals'
 import { clamp, createNoise2D, createRng, fbm, hash, hash01, smoothstep } from './noise'
 import { PALETTE } from './palette'
-import { buriedFraction, placeOnSurface, type PlacementOptions } from './placement'
+import { placeOnSurface, type PlacementOptions } from './placement'
 import {
+  MINERAL_FEATURES,
   cellAt,
   craterPolar,
-  isMineral,
   prevailingWind,
   type CraterKind,
   type Geology,
+  type MineralFeature,
   type Region,
   type ReliefMap,
   type TerrainCell,
@@ -315,8 +316,6 @@ export interface PlacementRecord {
   row: number
   feature: TerrainFeature
   placed: boolean
-  /** Fraction of exposed (mineral) vertices below the rendered surface; 0 when not placed. */
-  buried: number
 }
 
 export interface ReliefTerrain {
@@ -403,12 +402,11 @@ const BOULDER: PlacementOptions = { mode: 'rest', maxTilt: 0.45, maxRoughness: 0
  * that touch the ground). Otherwise the next candidate spot is tried.
  */
 const DEPOSIT: PlacementOptions = { mode: 'rest', maxTilt: 0.3, maxRoughness: 0.08, maxDrop: 0.35, maxBuried: 0.02 }
-const MINERAL_SIZE = { hematite: 1.3, gypsum: 1.3, olivine: 1.25, sulfur: 1.15 }
-const HALO_AMOUNT = { hematite: 0.5, gypsum: 0.55, olivine: 0.42, sulfur: 0.6 }
-const HALO = Object.fromEntries(Object.entries(PALETTE.halo).map(([kind, hex]) => [kind, new THREE.Color(hex)])) as Record<
-  keyof typeof PALETTE.halo,
-  THREE.Color
->
+/** Deposit scale on the terrain (1 fits one cell); exaggerated so finds read from the gameplay camera. */
+const MINERAL_SIZE: Record<MineralFeature, number> = { hematite: 1.3, gypsum: 1.3, olivine: 1.25, sulfur: 1.15 }
+const HALO_COLOR = Object.fromEntries(
+  MINERAL_FEATURES.map((kind) => [kind, new THREE.Color(MINERAL_APPEARANCE[kind].halo.color)]),
+) as Record<MineralFeature, THREE.Color>
 
 /**
  * Converts cell features into assets. Each asset is grounded on the rendered
@@ -504,7 +502,7 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
         options = DEPOSIT
         footprint = 0.6
         // A stain on the ground around the deposit makes it legible from the map view.
-        tint = { radius: 0.95 * size, color: HALO[cell.feature], amount: HALO_AMOUNT[cell.feature], darken: 0.06, seed }
+        tint = { radius: 0.95 * size, color: HALO_COLOR[cell.feature], amount: MINERAL_APPEARANCE[cell.feature].halo.amount, darken: 0.06, seed }
         break
       }
     }
@@ -515,7 +513,6 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
       row: cell.row,
       feature: cell.feature,
       placed,
-      buried: placed && isMineral(cell.feature) ? buriedFraction(object, surface) : 0,
     })
     if (!placed) {
       disposeObject(object)
