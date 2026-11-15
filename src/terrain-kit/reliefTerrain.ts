@@ -11,6 +11,7 @@ import {
   craterPolar,
   isMineral,
   prevailingWind,
+  type CraterKind,
   type Geology,
   type Region,
   type ReliefMap,
@@ -104,6 +105,32 @@ const catmullRom = (p0: number, p1: number, p2: number, p3: number, t: number) =
 const TAU = Math.PI * 2
 
 /**
+ * Ejecta rays: the bright streaks of crushed rock that radiate from young
+ * impact craters (a geological feature, unrelated to ray-traced rendering).
+ * Each crater gets a seeded number of streaks: fresh impacts show them fully,
+ * overlapping craters faintly, eroded and shallow craters not at all.
+ */
+const EJECTA_RAY_STRENGTH: Record<CraterKind, number> = { fresh: 1, overlapping: 0.4, eroded: 0, shallow: 0 }
+const EJECTA_RAY_COUNT = { min: 7, max: 11 }
+/** Rays start just inside the rim and fade out by this distance, in rim radii. */
+const EJECTA_RAY_REACH = { inner: 0.9, outer: 2.7 }
+/** World height of a full-strength ray, and how strongly it paints the bright ejecta surface. */
+const EJECTA_RAY_HEIGHT = 0.035
+const EJECTA_RAY_SURFACE = 1.6
+
+/** Surface detail on crater rims and on the floors of degraded craters. */
+const CRATER_DETAIL = {
+  /** Half-width of the hummocky band around each rim crest, in rim radii. */
+  crestWidth: 0.16,
+  /** World height of the rim-crest hummocks. */
+  crestRoughness: 0.07,
+  /** Eroded craters hold sediment inside `outer`, fully inside `inner` (rim radii). */
+  infill: { outer: 0.72, inner: 0.4 },
+  /** How strongly infilled floors take the pale lakebed surface. */
+  infillSurface: 1.3,
+}
+
+/**
  * Continuous field built only from cell data. Relief is bicubically
  * interpolated across neighbouring cells, sample points are gently
  * domain-warped so contours never follow the grid, and each geology adds its
@@ -119,9 +146,13 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): ReliefField {
   const wind = prevailingWind(map.seed)
   const windX = Math.cos(wind)
   const windZ = Math.sin(wind)
-  const rays = map.craters.map((crater) => {
+  const ejectaRays = map.craters.map((crater) => {
     const rng = createRng(hash(crater.seed, 0x7a))
-    return { count: rng.int(7, 11), phase: rng.range(0, TAU), strength: crater.kind === 'fresh' ? 1 : crater.kind === 'overlapping' ? 0.4 : 0 }
+    return {
+      count: rng.int(EJECTA_RAY_COUNT.min, EJECTA_RAY_COUNT.max),
+      phase: rng.range(0, TAU),
+      strength: EJECTA_RAY_STRENGTH[crater.kind],
+    }
   })
 
   /** World → continuous cell space, where cell (c, r) has its centre at (c, r). */
@@ -188,26 +219,27 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): ReliefField {
     return sample
   }
 
-  /** Ejecta rays of fresh impacts (0..1), rim crenulation weight, and the sediment infill of eroded craters. */
+  /** Ejecta-ray cover (0..1), rim crenulation weight, and the sediment infill of eroded craters. */
   const craterDetail = (x: number, z: number) => {
-    let ray = 0
+    let ejecta = 0
     let crest = 0
     let infill = 0
-    if (map.craters.length === 0) return { ray, crest, infill }
+    if (map.craters.length === 0) return { ejecta, crest, infill }
     const u = x / grid.cellSize + map.cols / 2 - 0.5
     const v = z / grid.cellSize + map.rows / 2 - 0.5
     map.craters.forEach((crater, k) => {
       if (Math.abs(u - crater.col) > crater.radius * 2.8 || Math.abs(v - crater.row) > crater.radius * 2.8) return
       const { d, angle } = craterPolar(crater, u, v)
-      crest += Math.exp(-(((d - 1) / 0.16) ** 2))
-      if (crater.kind === 'eroded') infill = Math.max(infill, smoothstep(0.72, 0.4, d))
-      const r = rays[k]
-      if (r.strength === 0 || d < 0.9 || d > 2.7) return
-      const streak = (0.5 + 0.5 * Math.cos(r.count * angle + r.phase + 0.8 * warp(x * 0.9, z * 0.9))) ** 5
+      crest += Math.exp(-(((d - 1) / CRATER_DETAIL.crestWidth) ** 2))
+      if (crater.kind === 'eroded') infill = Math.max(infill, smoothstep(CRATER_DETAIL.infill.outer, CRATER_DETAIL.infill.inner, d))
+      const rays = ejectaRays[k]
+      if (rays.strength === 0 || d < EJECTA_RAY_REACH.inner || d > EJECTA_RAY_REACH.outer) return
+      // Angular streak pattern, warped so the rays wander instead of radiating as perfect spokes.
+      const streak = (0.5 + 0.5 * Math.cos(rays.count * angle + rays.phase + 0.8 * warp(x * 0.9, z * 0.9))) ** 5
       const fade = smoothstep(0.92, 1.12, d) * Math.exp(-(d - 1) / 0.75)
-      ray = Math.max(ray, r.strength * fade * (0.35 + 0.65 * streak))
+      ejecta = Math.max(ejecta, rays.strength * fade * (0.35 + 0.65 * streak))
     })
-    return { ray, crest: Math.min(crest, 1), infill }
+    return { ejecta, crest: Math.min(crest, 1), infill }
   }
 
   /**
@@ -240,15 +272,15 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): ReliefField {
       // Lava plains end in a low lobate flow front, so the province edge is a landform, not a stain.
       const flowFront = 0.09 * smoothstep(0.3, 0.7, region.get('volcanic') ?? 0)
       const roughness = (geology.get('rubble') ?? 0) + 0.6 * (geology.get('ridge') ?? 0) + 0.4 * (geology.get('butte') ?? 0)
-      const { crest, ray } = craterDetail(x, z)
+      const { crest, ejecta } = craterDetail(x, z)
       return (
         reliefHeight(reliefAt(x, z), terrace) +
         flowFront +
         duneHeight +
         (roughness > 0 ? 0.06 * roughness * fbm(rough, x * 2.4, z * 2.4, 2) : 0) +
         // Uneven rim crests and hummocky ejecta, so rims never read as a lathe-turned ring.
-        (crest > 0.01 ? crest * 0.07 * fbm(rough, x * 1.5 + 11, z * 1.5, 2) : 0) +
-        ray * 0.035 +
+        (crest > 0.01 ? crest * CRATER_DETAIL.crestRoughness * fbm(rough, x * 1.5 + 11, z * 1.5, 2) : 0) +
+        ejecta * EJECTA_RAY_HEIGHT +
         0.018 * fbm(detail, x * 1.3, z * 1.3, 2)
       )
     },
@@ -260,10 +292,10 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): ReliefField {
       }
       for (const [g, w] of geology) add(GEOLOGY_ENTRIES[g], w)
       for (const [r, w] of region) add(REGION_ENTRIES[r], w)
-      const { ray, infill } = craterDetail(x, z)
-      if (ray > 0) out.ejecta = (out.ejecta ?? 0) + 1.6 * ray
+      const { ejecta, infill } = craterDetail(x, z)
+      if (ejecta > 0) out.ejecta = (out.ejecta ?? 0) + EJECTA_RAY_SURFACE * ejecta
       // Degraded craters hold pale, layered sediment on their flat floors.
-      if (infill > 0) out.lakebed = (out.lakebed ?? 0) + 1.3 * infill
+      if (infill > 0) out.lakebed = (out.lakebed ?? 0) + CRATER_DETAIL.infillSurface * infill
       return out
     },
     shadeAt(x, z) {
@@ -334,6 +366,8 @@ export function createReliefTerrain({
 /**
  * Base small-rock density per geology (0..1). Open ground stays clean; debris
  * belongs to rubble aprons, escarpments, fresh crater rims and formations.
+ * All of it is static Layer −1 geology generated once from the seed; Layer 0
+ * gameplay (building, expansion) never adds or removes it.
  */
 const SCATTER_DENSITY: Record<Geology, number> = {
   crater: 0.03,
@@ -353,6 +387,12 @@ const ROCK_PALETTE: Partial<Record<Region, readonly string[]>> = {
   volcanic: PALETTE.basaltRock,
   basin: PALETTE.paleRock,
 }
+
+/**
+ * Radius of the talus ring (rock fallen from a tall formation by erosion)
+ * scattered around each formation, in world units.
+ */
+const TALUS_RADIUS: Partial<Record<TerrainFeature, number>> = { pillar: 0.75, butte: 0.9, mesa: 1.2 }
 
 /** Formations grow out of the ground; loose rocks and deposits rest on it. */
 const ROOTED: PlacementOptions = { mode: 'root', maxDrop: 0.8 }
@@ -485,9 +525,8 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
     const { x, z } = object.position
     keepOut.push({ x, z, r: footprint + 0.08 })
     if (tint) tints.push({ x, z, ...tint })
-    if (cell.feature === 'pillar') talus.push({ x, z, r: 0.75 })
-    if (cell.feature === 'butte') talus.push({ x, z, r: 0.9 })
-    if (cell.feature === 'mesa') talus.push({ x, z, r: 1.2 })
+    const talusRadius = TALUS_RADIUS[cell.feature]
+    if (talusRadius) talus.push({ x, z, r: talusRadius })
   }
 
   const dressing = bakeStaticMeshes(props, chunkKey)
@@ -518,6 +557,8 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
  * (concave, steep cells), on rubble aprons and fresh crater rims, in clumps
  * driven by a cluster mask, and as talus rings around tall formations.
  * Broad open plains, dunes and lakebeds keep their breathing room.
+ * This is environmental decoration baked at build time, not gameplay debris:
+ * nothing here spawns or despawns at runtime.
  */
 function scatterPoints(
   map: ReliefMap,

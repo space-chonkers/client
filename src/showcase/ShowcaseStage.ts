@@ -73,15 +73,65 @@ const FOCUS_DISTANCE = 9
  */
 const SUN_DIRECTION = new THREE.Vector3(-0.62, 0.8, 0.36).normalize()
 
+/** Narrow field of view: flattens perspective so the map reads like a diorama. */
+const CAMERA = { fov: 30, near: 0.1, far: 300 }
+
+const ORBIT = {
+  dampingFactor: 0.08,
+  minDistance: 2,
+  /** Initial limit only; each camera preset widens it to fit the content. */
+  maxDistance: 90,
+  /** Just above the horizon, so the camera never dips below the ground. */
+  maxPolarAngle: Math.PI * 0.49,
+  /** Furthest zoom-out, as a multiple of the framing distance of the current preset. */
+  maxDistanceFactor: 2.5,
+}
+
+/**
+ * Warm sky over dark rust ground; a cool rim light hints at the thin blue
+ * Martian sky. Fill is kept moderate so form comes from the sun, not from
+ * flat ambient light.
+ */
+const LIGHTING = {
+  sun: { color: '#ffeed6', intensity: 3.4 },
+  hemisphere: { sky: '#ffe2c8', ground: '#5e2c22', intensity: 0.75 },
+  rim: { color: '#9db4ff', intensity: 0.6, position: [6, 5, -8] as const },
+}
+
+const SHADOW = {
+  mapSize: 2048,
+  bias: -0.0004,
+  normalBias: 0.02,
+  /** Minimum shadow-frustum half-size, so close-ups still shadow their surroundings. */
+  minRadius: 4,
+  /** Shadow frustum half-size as a share of the camera distance. */
+  distanceShare: 0.75,
+}
+
+/** Large invisible plane that only shows the content's drop shadow. */
+const SHADOW_CATCHER = { size: 400, color: '#12091c', opacity: 0.28, offset: 0.002 }
+
+/**
+ * View-dependent refresh: clip planes and shadows follow the orbit, but only
+ * once the target moves or the distance changes by these shares of the distance.
+ */
+const VIEW_REFRESH = { targetShare: 0.03, distanceShare: 0.05 }
+const NEAR_PLANE = { share: 0.02, min: 0.03, max: 5 }
+/** Far plane reaches past the scene by this multiple of its radius. */
+const FAR_PLANE_RADII = 2.5
+
+/** Smoothing of the displayed fps: each frame moves this share toward the instantaneous value. */
+const FPS_SMOOTHING = 0.05
+
 /** Owns the renderer, camera, lights and render loop; content is swapped in via `load`. */
 export class ShowcaseStage {
   private readonly container: HTMLElement
   private readonly renderer: THREE.WebGLRenderer
   private readonly labelRenderer = new CSS2DRenderer()
   private readonly scene = new THREE.Scene()
-  private readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 300)
+  private readonly camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far)
   private readonly controls: OrbitControls
-  private readonly sun = new THREE.DirectionalLight('#ffeed6', 3.4)
+  private readonly sun = new THREE.DirectionalLight(LIGHTING.sun.color, LIGHTING.sun.intensity)
   private readonly shadowCatcher: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial>
   private readonly resizeObserver: ResizeObserver
   private readonly timer = new THREE.Timer()
@@ -112,28 +162,27 @@ export class ShowcaseStage {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.08
+    this.controls.dampingFactor = ORBIT.dampingFactor
     this.controls.screenSpacePanning = true
-    this.controls.minDistance = 2
-    this.controls.maxDistance = 90
-    this.controls.maxPolarAngle = Math.PI * 0.49
+    this.controls.minDistance = ORBIT.minDistance
+    this.controls.maxDistance = ORBIT.maxDistance
+    this.controls.maxPolarAngle = ORBIT.maxPolarAngle
 
-    // Warm sky over dark rust ground; a cool rim light hints at the thin blue Martian sky.
-    // Fill kept moderate so form comes from the sun, not from flat ambient light.
-    this.scene.add(new THREE.HemisphereLight('#ffe2c8', '#5e2c22', 0.75))
-    const rim = new THREE.DirectionalLight('#9db4ff', 0.6)
-    rim.position.set(6, 5, -8)
-    this.scene.add(rim)
+    const { hemisphere, rim } = LIGHTING
+    this.scene.add(new THREE.HemisphereLight(hemisphere.sky, hemisphere.ground, hemisphere.intensity))
+    const rimLight = new THREE.DirectionalLight(rim.color, rim.intensity)
+    rimLight.position.set(...rim.position)
+    this.scene.add(rimLight)
 
     this.sun.castShadow = true
-    this.sun.shadow.mapSize.set(2048, 2048)
-    this.sun.shadow.bias = -0.0004
-    this.sun.shadow.normalBias = 0.02
+    this.sun.shadow.mapSize.set(SHADOW.mapSize, SHADOW.mapSize)
+    this.sun.shadow.bias = SHADOW.bias
+    this.sun.shadow.normalBias = SHADOW.normalBias
     this.scene.add(this.sun, this.sun.target)
 
     this.shadowCatcher = new THREE.Mesh(
-      new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2),
-      new THREE.ShadowMaterial({ color: '#12091c', opacity: 0.28 }),
+      new THREE.PlaneGeometry(SHADOW_CATCHER.size, SHADOW_CATCHER.size).rotateX(-Math.PI / 2),
+      new THREE.ShadowMaterial({ color: SHADOW_CATCHER.color, opacity: SHADOW_CATCHER.opacity }),
     )
     this.shadowCatcher.receiveShadow = true
     this.scene.add(this.shadowCatcher)
@@ -183,7 +232,7 @@ export class ShowcaseStage {
       if (typeof object.userData.update === 'function') this.updaters.push(object.userData.update)
     })
 
-    this.shadowCatcher.position.y = content.floorY - 0.002
+    this.shadowCatcher.position.y = content.floorY - SHADOW_CATCHER.offset
     const sphere = content.bounds.getBoundingSphere(new THREE.Sphere())
     this.sceneRadius = sphere.radius
     this.fitSun(sphere.center, sphere.radius)
@@ -267,7 +316,7 @@ export class ShowcaseStage {
     }
     this.camera.position.copy(target).addScaledVector(towardCamera, distance)
     this.controls.target.copy(target)
-    this.controls.maxDistance = distance * 2.5
+    this.controls.maxDistance = distance * ORBIT.maxDistanceFactor
     this.controls.update()
   }
 
@@ -322,15 +371,15 @@ export class ShowcaseStage {
   private updateViewDependent(): void {
     const target = this.controls.target
     const distance = this.camera.position.distanceTo(target)
-    const moved = this.viewTarget.distanceTo(target) > distance * 0.03
-    if (!moved && Math.abs(distance - this.viewDistance) < this.viewDistance * 0.05) return
+    const moved = this.viewTarget.distanceTo(target) > distance * VIEW_REFRESH.targetShare
+    if (!moved && Math.abs(distance - this.viewDistance) < this.viewDistance * VIEW_REFRESH.distanceShare) return
     this.viewTarget.copy(target)
     this.viewDistance = distance
-    this.camera.near = THREE.MathUtils.clamp(distance * 0.02, 0.03, 5)
-    this.camera.far = distance + this.sceneRadius * 2.5
+    this.camera.near = THREE.MathUtils.clamp(distance * NEAR_PLANE.share, NEAR_PLANE.min, NEAR_PLANE.max)
+    this.camera.far = distance + this.sceneRadius * FAR_PLANE_RADII
     this.camera.updateProjectionMatrix()
     // Shadows cover roughly what the camera sees, so zoomed-in views keep crisp shadows.
-    this.fitSun(target, THREE.MathUtils.clamp(distance * 0.75, 4, this.sceneRadius))
+    this.fitSun(target, THREE.MathUtils.clamp(distance * SHADOW.distanceShare, SHADOW.minRadius, this.sceneRadius))
     this.content?.onViewChange?.(target, distance)
   }
 
@@ -347,7 +396,7 @@ export class ShowcaseStage {
     this.timer.update(timestamp)
     const time = this.timer.getElapsed()
     const delta = this.timer.getDelta()
-    if (delta > 0) this.fps += (1 / delta - this.fps) * 0.05
+    if (delta > 0) this.fps += (1 / delta - this.fps) * FPS_SMOOTHING
     for (const update of this.updaters) update(time)
     this.controls.update()
     this.updateViewDependent()

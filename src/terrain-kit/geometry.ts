@@ -135,7 +135,14 @@ export function bakeStaticMeshes(root: THREE.Object3D, keyOf: (x: number, z: num
   return baked
 }
 
-/** Translation + Y rotation + (optionally non-uniform) scale. */
+/**
+ * Translation + Y rotation + (optionally non-uniform) scale.
+ *
+ * Non-uniform scale has no render cost here: kit assets apply this matrix to
+ * vertices at build time (`painted`, `bakeStaticMeshes`), so the GPU only sees
+ * static, already-merged geometry and the draw-call count is unchanged.
+ * Instanced scatter (`createScatteredRocks`) only passes uniform scales.
+ */
 export function placement(x: number, y: number, z: number, rotationY = 0, scale: number | THREE.Vector3Like = 1) {
   const s = typeof scale === 'number' ? new THREE.Vector3(scale, scale, scale) : new THREE.Vector3().copy(scale)
   return new THREE.Matrix4().compose(

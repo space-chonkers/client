@@ -128,30 +128,132 @@ interface CraterForm {
   breaches: { angle: number; width: number }[]
 }
 
+/** A relief amount that grows with crater radius `r` (in cells): `base + perRadius × r`. */
+interface RadiusScaled {
+  base: number
+  perRadius: number
+}
+
+/** A value that differs for craters above {@link BIG_CRATER_RADIUS}. */
+interface BySize {
+  small: number
+  big: number
+}
+
+/**
+ * Tunable shape of one crater kind; see {@link CRATER_KINDS} for what each
+ * kind looks like. Relief amounts are in relief units, widths in rim radii.
+ */
+interface CraterMorphology {
+  depth: RadiusScaled
+  rim: RadiusScaled
+  ejecta: RadiusScaled
+  floor: BySize
+  peak: BySize
+  irregularity: number
+  inner: number
+  outer: number
+  additive: boolean
+  /** Amplitude of the outline's deviation from a circle. */
+  outline: number
+  /** Number of collapsed rim sections. */
+  breaches: { min: number; max: number }
+}
+
+/** Craters above this radius (in cells) are complex: wider floor and a central peak. */
+const BIG_CRATER_RADIUS = 3.4
+/** Angular half-width range of a rim breach, in radians. */
+const BREACH_WIDTH = { min: 0.35, max: 0.6 }
+/** Phase offsets for rim wobble (3) and outline irregularity (2). */
+const CRATER_PHASES = 5
+
+const CRATER_MORPHOLOGY: Record<CraterKind, CraterMorphology> = {
+  fresh: {
+    depth: { base: 0.5, perRadius: 0.06 },
+    rim: { base: 0.2, perRadius: 0.025 },
+    ejecta: { base: 0.05, perRadius: 0.01 },
+    floor: { small: 0.12, big: 0.35 },
+    peak: { small: 0, big: 0.24 },
+    irregularity: 0.4,
+    inner: 0.2,
+    outer: 0.5,
+    additive: false,
+    outline: 0.07,
+    breaches: { min: 0, max: 0 },
+  },
+  eroded: {
+    depth: { base: 0.32, perRadius: 0.05 },
+    rim: { base: 0.1, perRadius: 0.02 },
+    ejecta: { base: 0, perRadius: 0 },
+    floor: { small: 0.58, big: 0.58 },
+    peak: { small: 0, big: 0.08 },
+    irregularity: 0.6,
+    inner: 0.34,
+    outer: 0.7,
+    additive: false,
+    outline: 0.11,
+    breaches: { min: 1, max: 2 },
+  },
+  shallow: {
+    depth: { base: 0.14, perRadius: 0.03 },
+    rim: { base: 0.035, perRadius: 0 },
+    ejecta: { base: 0, perRadius: 0 },
+    floor: { small: 0, big: 0 },
+    peak: { small: 0, big: 0 },
+    irregularity: 0.5,
+    inner: 0.5,
+    outer: 0.6,
+    additive: true,
+    outline: 0.1,
+    breaches: { min: 0, max: 0 },
+  },
+  overlapping: {
+    depth: { base: 0.36, perRadius: 0.05 },
+    rim: { base: 0.13, perRadius: 0.02 },
+    ejecta: { base: 0.025, perRadius: 0 },
+    floor: { small: 0.25, big: 0.25 },
+    peak: { small: 0, big: 0 },
+    irregularity: 0.5,
+    inner: 0.24,
+    outer: 0.5,
+    additive: true,
+    outline: 0.09,
+    breaches: { min: 1, max: 1 },
+  },
+}
+
 const FORMS = new WeakMap<Crater, CraterForm>()
 
+/** Resolves a crater's morphology for its size and seed (cached per crater). */
 function craterForm(crater: Crater): CraterForm {
   const cached = FORMS.get(crater)
   if (cached) return cached
   const rng = createRng(crater.seed)
+  const morphology = CRATER_MORPHOLOGY[crater.kind]
   const r = crater.radius
-  const big = r > 3.4
-  const phases = Array.from({ length: 5 }, () => rng.range(0, Math.PI * 2))
-  const breaches = (count: number) => Array.from({ length: count }, () => ({ angle: rng.range(0, Math.PI * 2), width: rng.range(0.35, 0.6) }))
-  let form: CraterForm
-  switch (crater.kind) {
-    case 'fresh':
-      form = { depth: 0.5 + 0.06 * r, floor: big ? 0.35 : 0.12, rim: 0.2 + 0.025 * r, irregularity: 0.4, inner: 0.2, outer: 0.5, ejecta: 0.05 + 0.01 * r, peak: big ? 0.24 : 0, additive: false, outline: 0.07, phases, breaches: [] }
-      break
-    case 'eroded':
-      form = { depth: 0.32 + 0.05 * r, floor: 0.58, rim: 0.1 + 0.02 * r, irregularity: 0.6, inner: 0.34, outer: 0.7, ejecta: 0, peak: big ? 0.08 : 0, additive: false, outline: 0.11, phases, breaches: breaches(rng.int(1, 2)) }
-      break
-    case 'shallow':
-      form = { depth: 0.14 + 0.03 * r, floor: 0, rim: 0.035, irregularity: 0.5, inner: 0.5, outer: 0.6, ejecta: 0, peak: 0, additive: true, outline: 0.1, phases, breaches: [] }
-      break
-    case 'overlapping':
-      form = { depth: 0.36 + 0.05 * r, floor: 0.25, rim: 0.13 + 0.02 * r, irregularity: 0.5, inner: 0.24, outer: 0.5, ejecta: 0.025, peak: 0, additive: true, outline: 0.09, phases, breaches: breaches(1) }
-      break
+  const size: keyof BySize = r > BIG_CRATER_RADIUS ? 'big' : 'small'
+  const scaled = ({ base, perRadius }: RadiusScaled) => base + perRadius * r
+  // Draw order matters for determinism: phases first, then breaches.
+  const phases = Array.from({ length: CRATER_PHASES }, () => rng.range(0, Math.PI * 2))
+  const { min, max } = morphology.breaches
+  const breachCount = min === max ? min : rng.int(min, max)
+  const breaches = Array.from({ length: breachCount }, () => ({
+    angle: rng.range(0, Math.PI * 2),
+    width: rng.range(BREACH_WIDTH.min, BREACH_WIDTH.max),
+  }))
+  const form: CraterForm = {
+    depth: scaled(morphology.depth),
+    floor: morphology.floor[size],
+    rim: scaled(morphology.rim),
+    irregularity: morphology.irregularity,
+    inner: morphology.inner,
+    outer: morphology.outer,
+    ejecta: scaled(morphology.ejecta),
+    peak: morphology.peak[size],
+    additive: morphology.additive,
+    outline: morphology.outline,
+    phases,
+    breaches,
   }
   FORMS.set(crater, form)
   return form
@@ -196,6 +298,18 @@ function applyCrater(crater: Crater, base: number, v: number, col: number, row: 
   return v + rimLift + ejecta + (base + bowl - v) * smoothstep(1.02, 0.72, d)
 }
 
+/** Crater population tunables; crater density is the main difference between young and old terrain. */
+const CRATER_POPULATION = {
+  /** One crater per this many cells of map area. */
+  cellsPerCrater: 210,
+  /** Hero impact radius as a share of the shorter map side. */
+  heroRadiusShare: { min: 0.085, max: 0.11 },
+  /** Other craters: `min + span × u^exponent` for uniform u, capped at `heroShare` × hero radius. */
+  radius: { min: 1.2, span: 3.4, exponent: 2.6, heroShare: 0.75 },
+  /** Chance of keeping a candidate far outside crater-field regions. */
+  outsideFieldChance: 0.15,
+}
+
 /**
  * Crater count scales with map area and sizes follow a steep power law (many
  * small, few large). Every map gets one large "hero" impact so the macro
@@ -210,18 +324,19 @@ function placeCraters(
   rows: number,
   highland: (col: number, row: number) => number,
 ): Crater[] {
-  const target = Math.max(1, Math.round((cols * rows) / 210))
+  const { cellsPerCrater, heroRadiusShare, radius: size, outsideFieldChance } = CRATER_POPULATION
+  const target = Math.max(1, Math.round((cols * rows) / cellsPerCrater))
   const craters: Crater[] = []
-  const heroRadius = Math.min(cols, rows) * rng.range(0.085, 0.11)
+  const heroRadius = Math.min(cols, rows) * rng.range(heroRadiusShare.min, heroRadiusShare.max)
   for (let attempt = 0; attempt < target * 10 && craters.length < target; attempt++) {
     const hero = craters.length === 0
-    const radius = hero ? heroRadius : Math.min(heroRadius * 0.75, 1.2 + 3.4 * rng.next() ** 2.6)
+    const radius = hero ? heroRadius : Math.min(heroRadius * size.heroShare, size.min + size.span * rng.next() ** size.exponent)
     const margin = hero ? radius + 2 : 1
     const col = rng.range(margin, cols - 1 - margin)
     const row = rng.range(margin, rows - 1 - margin)
     if (!hero) {
       const inField = smoothstep(-0.2, 0.3, fbm(field, col * 0.04, row * 0.04, 2))
-      if (rng.next() > 0.15 + 0.85 * inField) continue
+      if (rng.next() > outsideFieldChance + (1 - outsideFieldChance) * inField) continue
     }
     // A strong overlap would erase the older crater; a partial one overprints it.
     const overlaps = craters.filter((c) => Math.hypot(c.col - col, c.row - row) < (c.radius + radius) * 1.05)
@@ -428,6 +543,18 @@ function nearestCrater(craters: readonly Crater[], col: number, row: number): Cr
  * quantiles so every seed gets each province. A majority filter removes
  * speckles so regions read as coherent areas.
  */
+const REGION_THRESHOLDS = {
+  /** Cells this close to a non-shallow crater (in rim radii) belong to its crater field. */
+  craterFieldReach: 1.4,
+  /** Smoothed relief at or above this is highland. */
+  highlandsMinRelief: 0.3,
+  /** Smoothed relief at or below this is basin. */
+  basinMaxRelief: -0.17,
+  /** Shares of the remaining open plains turned into volcanic plains and dune fields. */
+  volcanicShare: 0.26,
+  dunefieldShare: 0.2,
+}
+
 function classifyRegions(
   seed: number,
   cols: number,
@@ -457,9 +584,9 @@ function classifyRegions(
 
   const regions: Region[] = relief.map((_, i) => {
     const hit = nearest[i]
-    if (hit && hit.crater.kind !== 'shallow' && hit.d < 1.4) return 'craterfield'
-    if (smooth[i] >= 0.3) return 'highlands'
-    if (smooth[i] <= -0.17) return 'basin'
+    if (hit && hit.crater.kind !== 'shallow' && hit.d < REGION_THRESHOLDS.craterFieldReach) return 'craterfield'
+    if (smooth[i] >= REGION_THRESHOLDS.highlandsMinRelief) return 'highlands'
+    if (smooth[i] <= REGION_THRESHOLDS.basinMaxRelief) return 'basin'
     return 'plains'
   })
   const open = regions.map((region, i) => (region === 'plains' ? i : -1)).filter((i) => i >= 0)
@@ -467,8 +594,8 @@ function classifyRegions(
     const list = open.map((i) => values[i]).sort((a, b) => b - a)
     return list.length ? list[Math.floor(clamp(share, 0, 1) * (list.length - 1))] : Infinity
   }
-  const volcanicCut = cut(volcanic, 0.26)
-  const sandCut = cut(sand, 0.2)
+  const volcanicCut = cut(volcanic, REGION_THRESHOLDS.volcanicShare)
+  const sandCut = cut(sand, REGION_THRESHOLDS.dunefieldShare)
   for (const i of open) {
     if (volcanic[i] >= volcanicCut) regions[i] = 'volcanic'
     else if (sand[i] >= sandCut) regions[i] = 'dunefield'
