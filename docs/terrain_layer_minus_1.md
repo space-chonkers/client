@@ -182,6 +182,7 @@ drop that branch and the lazily imported showcase chunk.
 | Showcase chunk fails to load (dev) | Error logged, falls back to the game `App` |
 | Non-numeric seed in the showcase | Input reverts to the current seed |
 | Invalid real-elevation payload (NoData, wrong sample count, bad coordinates…) | `MarsTerrainDataError` listing every issue; no map is built |
+| `createReliefMap` given `elevation` whose sample count is not `(cols + 1) × (rows + 1)` | `RangeError`; no map is built |
 
 ## 9. Security Considerations
 
@@ -214,7 +215,7 @@ so Bun and Node globals stay out of browser code. Fixtures in
 - 51×51 corner samples → 50×50 cells, sample order and orientation;
 - normalization: range, spike robustness, flat ground;
 - validation and NoData rejection;
-- true-scale rendering and determinism (a fixed render hash for procedural maps);
+- true-scale rendering and determinism of real-elevation maps;
 - coordinate conversions: the 0°/360° meridian both ways, high latitudes, polar
   rejection and invalid inputs;
 - the renderer importing no terrain source.

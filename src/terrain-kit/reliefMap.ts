@@ -254,6 +254,11 @@ export function createReliefMap(
   craters: readonly Crater[] = [],
   { mineralRules = DEFAULT_MINERAL_RULES, elevation, classification = 'procedural' }: ReliefMapOptions = {},
 ): ReliefMap {
+  // Callers other than the contract adapter skip its validation; a short array would yield NaN heights.
+  const expectedSamples = (cols + 1) * (rows + 1)
+  if (elevation && elevation.samplesMeters.length !== expectedSamples) {
+    throw new RangeError(`elevation.samplesMeters has ${elevation.samplesMeters.length} values, expected ${expectedSamples} corner samples for a ${cols}×${rows} map`)
+  }
   const cellMeters = elevation ? cellElevations(elevation.samplesMeters, cols, rows) : null
   const value = (col: number, row: number) => relief[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)]
   const rng = createRng(hash(seed, 0xfea))

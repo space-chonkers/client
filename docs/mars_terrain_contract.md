@@ -10,8 +10,8 @@ agreement with the backend team before Phase 4B (§7).
 The future backend geospatial module picks a location on Mars with verified
 HiRISE DTM coverage. It then samples real elevations and sends one map's terrain to
 the client. The client turns the payload into the same `ReliefMap` the
-procedural generator produces, so rendering, classification and dressing
-don't change.
+procedural generator produces, so the same renderer draws it. Classification
+and dressing stay off unless the client opts in (§5).
 
 The client never reads NASA rasters, reprojects data or discovers datasets.
 All of that stays in the backend.
@@ -116,7 +116,7 @@ The example values above are illustrative placeholders, not real measurements.
 | Raw elevation (m) | `map.elevation.samplesMeters` | A copy of the payload, unmodified. |
 | Relative height (m) | `elevation − normalization.referenceMeters` | The reference defaults to the median sample. |
 | Normalized relief [-1, 1] | `TerrainCell.relief` | `(elevation − reference) / scale`, clamped. `scale` is the 98th percentile of distances from the reference, at least 15 m, so one spike can't flatten the map. |
-| Visual height (world units) | `reliefField.ts` | Relative height × world units per metre (cell size / 10 m), at true scale. No procedural micro-relief is added. |
+| Visual height (world units) | `reliefField.ts` | Relative height × world units per metre (`cellSize / grid.cellSizeMeters`), at true scale. No procedural micro-relief is added. |
 
 By default a real map is **unclassified** (`map.classification === 'none'`):
 every cell has geology and region `unclassified` and feature `none`. The

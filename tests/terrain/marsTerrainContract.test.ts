@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { MarsTerrainDataError, createReliefMapFromMarsTerrain, parseMarsTerrainData } from '../../src/terrain-kit/marsTerrainContract'
 import { createReliefField } from '../../src/terrain-kit/reliefField'
 import * as THREE from 'three'
-import { UNCLASSIFIED } from '../../src/terrain-kit/reliefMap'
+import { UNCLASSIFIED, createReliefMap } from '../../src/terrain-kit/reliefMap'
 import { createReliefTerrain } from '../../src/terrain-kit/reliefTerrain'
 import { syntheticMarsTerrain, syntheticPlane } from './syntheticMarsTerrain'
 
@@ -131,6 +131,12 @@ describe('validation', () => {
       'source.provider is required',
       'seed must be an integer in [0, 2^32)',
     ])
+  })
+
+  test('createReliefMap rejects elevation that does not match the grid', () => {
+    const { elevation } = createReliefMapFromMarsTerrain(syntheticMarsTerrain({ columns: 3, rows: 3 }))
+    // 4×4 corner samples fit a 3×3 map, not a 4×3 one.
+    expect(() => createReliefMap(1, 4, 3, new Array(12).fill(0), [], { elevation })).toThrow(RangeError)
   })
 
   test('rejects payloads that are not objects', () => {
