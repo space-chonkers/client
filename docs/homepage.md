@@ -19,7 +19,7 @@ src/
 ├── App.tsx                     # Selected mode state, app-wide music and hazard alert
 ├── style.css                   # Global base styles + mission screen
 ├── ui/
-│   ├── theme.css               # JAM palette tokens and font (.home-screen, .mission-screen)
+│   ├── theme.css               # JAM palette tokens and font (.home-screen, .lobby-screen, .mission-screen)
 │   └── chunkyButton.css        # Shared .chunky-button / .chunky-button--icon
 ├── audio/
 │   ├── soundManager.ts         # Shared AudioContext, output chain and playTone helper
@@ -28,10 +28,11 @@ src/
 └── home/
     ├── HomeScreen.tsx          # Screen composition (UI overlay)
     ├── HomeScreen.css          # Layout, logo and mode menu styles
-    ├── MarsHomeScene.tsx       # Renderer, camera, input and animation loop
+    ├── MarsHomeScene.tsx       # Renderer, camera, input and animation loop (also the lobby background)
+    ├── MarsHomeScene.css       # Full-bleed scene positioning
     ├── MusicVolumeControl.tsx  # Collapsible music button
     ├── MusicVolumeControl.css  # Music button and panel styles
-    ├── gameMode.ts             # GameMode type and menu options
+    ├── gameMode.ts             # GameMode type, COOP_MAX_PLAYERS and menu options
     └── scene/
         └── marsProps.ts        # Low-poly builders, palette and walkable tiles
 ```

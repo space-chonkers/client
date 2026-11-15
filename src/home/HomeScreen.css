@@ -5,15 +5,6 @@
   overflow: hidden;
 }
 
-.mars-scene {
-  position: absolute;
-  inset: 0;
-}
-
-.mars-scene canvas {
-  display: block;
-}
-
 .home-overlay {
   position: absolute;
   inset: 0;
