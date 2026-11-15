@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Low-poly junior astronaut, matching the in-game model colors -->
+  <g stroke="#2b1d1a" stroke-width="3" stroke-linejoin="round">
+    <rect x="12" y="30" width="8" height="18" rx="2" fill="#e5533c" />
+    <rect x="44" y="30" width="8" height="18" rx="2" fill="#e5533c" />
+    <rect x="18" y="36" width="28" height="22" rx="4" fill="#fff3e6" />
+    <rect x="18" y="49" width="28" height="5" fill="#e5533c" />
+    <polygon points="32,4 49,11 55,27 47,41 32,45 17,41 9,27 15,11" fill="#fff3e6" />
+    <rect x="17" y="18" width="30" height="16" rx="7" fill="#164e52" />
+  </g>
+  <rect x="21" y="21" width="8" height="4" rx="2" fill="#7fd1c7" />
+</svg>

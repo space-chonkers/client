@@ -1,3 +1,7 @@
+/*
+ * Global base styles only. Feature styles live next to their components
+ * (e.g. src/home/HomeScreen.css) and shared UI styles in src/ui/.
+ */
 :root {
   color-scheme: dark;
   font-family: system-ui, sans-serif;
@@ -30,4 +34,15 @@ body,
 
 .cube-scene canvas {
   display: block;
+}
+
+/* Screen after choosing a mode: the player sandbox with a button back home */
+.mission-screen {
+  position: relative;
+}
+
+.mission-screen__back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
 }
