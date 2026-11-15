@@ -21,6 +21,7 @@ export interface HazardAlertControls {
  * Turns the hazard codes sent on each server tick into a warning banner and
  * plays an alarm only when the banner first appears. Closing the banner turns
  * the hazard into the "ongoing" one until `resolveOngoingHazard` is called.
+ * Hazards never stack: a new one is accepted only when none is active.
  * Only the warning and its status are handled here; the hazard's effects are not.
  */
 export function useHazardAlert(): HazardAlertControls {
@@ -40,10 +41,9 @@ export function useHazardAlert(): HazardAlertControls {
         return
       }
 
-      // The server may repeat the same code on later ticks; that must not reopen
-      // the banner nor replay the alarm for a hazard already shown or in progress
-      if (warningHazard?.type === hazard.type) return
-      if (ongoingHazard?.type === hazard.type) return
+      // Only one hazard can be active at a time: while one is in the banner or in
+      // progress, any other code (including repeats of the same one) is ignored
+      if (warningHazard || ongoingHazard) return
 
       setWarningHazard(hazard)
       alarm.play()
