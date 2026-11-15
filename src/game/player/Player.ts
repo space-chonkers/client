@@ -31,30 +31,37 @@ export type MovementBounds = {
   maxZ: number
 }
 
-const PICKUP_REACH_DURATION = 0.35
+export type PlayerOptions = {
+  /** Main suit color. Defaults to ASTRONAUT_COLORS.suit (white). */
+  suitColor?: THREE.ColorRepresentation
+  tuning?: Readonly<PlayerTuning>
+  bounds?: MovementBounds | null
+}
 
 /**
  * The astronaut player: 4-direction movement, an always-known facing, and
- * procedural walk/idle/reach animation.
+ * procedural walk/idle animation.
  *
  * Add `player.object` to the scene and call `update()` once per frame.
  */
 export class Player {
   /** Root object: position = player position, rotation.y = visual facing. */
   readonly object = new THREE.Group()
-  readonly model = new AstronautModel()
+  readonly model: AstronautModel
 
+  private readonly tuning: Readonly<PlayerTuning>
+  private bounds: MovementBounds | null
   private currentFacing: Facing = 'down'
   private readonly velocity = new THREE.Vector3()
   private readonly targetVelocity = new THREE.Vector3()
   private yaw = facingToYaw('down')
   private walkPhase = 0
-  private reachTime = 0
 
-  constructor(
-    private readonly tuning: Readonly<PlayerTuning> = DEFAULT_PLAYER_TUNING,
-    private bounds: MovementBounds | null = null,
-  ) {
+  constructor(options: PlayerOptions = {}) {
+    this.tuning = options.tuning ?? DEFAULT_PLAYER_TUNING
+    this.bounds = options.bounds ?? null
+    this.model = new AstronautModel({ suitColor: options.suitColor })
+
     this.object.name = 'Player'
     this.object.add(this.model.root)
     this.object.rotation.y = this.yaw
@@ -88,9 +95,9 @@ export class Player {
     this.currentFacing = facing
   }
 
-  /** Trigger the short "reach forward" pickup gesture. */
-  playPickupReach(): void {
-    this.reachTime = PICKUP_REACH_DURATION
+  /** Change the astronaut's suit color, e.g. to tell players apart. */
+  setSuitColor(color: THREE.ColorRepresentation): void {
+    this.model.setSuitColor(color)
   }
 
   /**
@@ -127,11 +134,7 @@ export class Player {
     const moving = Math.min(speed / walkSpeed, 1)
     this.walkPhase += speed * strideRate * delta
 
-    this.reachTime = Math.max(0, this.reachTime - delta)
-    const reachProgress = 1 - this.reachTime / PICKUP_REACH_DURATION
-    const reach = this.reachTime > 0 ? Math.sin(Math.PI * reachProgress) : 0
-
-    this.model.pose(this.walkPhase, moving, elapsed, reach)
+    this.model.pose(this.walkPhase, moving, elapsed)
   }
 
   dispose(): void {

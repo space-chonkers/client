@@ -1,8 +1,5 @@
 import * as THREE from 'three'
-import { PlaceholderItem } from './debug/PlaceholderItem'
 import { InputController } from './input/InputController'
-import { Backpack, type BackpackItem } from './pickups/Backpack'
-import { PickupSystem } from './pickups/PickupSystem'
 import { Player } from './player/Player'
 
 /** Size of the debug grid; the player is kept inside it. */
@@ -14,24 +11,19 @@ const CAMERA_FOLLOW_SPEED = 6
 /** Longest frame step, so a background tab doesn't teleport the player. */
 const MAX_DELTA = 1 / 20
 
-export type BackpackListener = (items: readonly BackpackItem[]) => void
-
 /**
- * Test scene for the player: astronaut, follow camera, lights, a debug grid
- * and placeholder cubes to pick up. No terrain or world assets.
+ * Test scene for the player: astronaut, follow camera, lights and a debug
+ * grid. No terrain or world assets.
  *
  * Call `dispose()` to stop it and free GPU resources.
  */
 export class PlayerSandbox {
   readonly player: Player
-  readonly backpack = new Backpack()
 
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200)
   private readonly input = new InputController()
-  private readonly pickups: PickupSystem
-  private readonly items: PlaceholderItem[] = []
   private readonly sun = new THREE.DirectionalLight('#fff4e6', 2.6)
   private readonly grid = new THREE.GridHelper(GRID_SIZE, GRID_SIZE, '#7a8296', '#3a4050')
   private readonly shadowCatcher: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial>
@@ -56,9 +48,8 @@ export class PlayerSandbox {
 
     // Player
     const half = GRID_SIZE / 2 - 0.5
-    this.player = new Player(undefined, { minX: -half, maxX: half, minZ: -half, maxZ: half })
+    this.player = new Player({ bounds: { minX: -half, maxX: half, minZ: -half, maxZ: half } })
     this.scene.add(this.player.object)
-    this.pickups = new PickupSystem(this.player, this.backpack)
 
     // Lights
     this.scene.add(new THREE.HemisphereLight('#dbe7ff', '#4a3a34', 1.4))
@@ -84,21 +75,6 @@ export class PlayerSandbox {
     this.shadowCatcher.receiveShadow = true
     this.scene.add(this.shadowCatcher)
 
-    // TEST ONLY: placeholder items to pick up.
-    const placeholders: [string, string, string, number, number][] = [
-      ['test-cube-1', 'Test cube 1', '#ff5d73', 2, -2],
-      ['test-cube-2', 'Test cube 2', '#4dd0e1', -3, -1],
-      ['test-cube-3', 'Test cube 3', '#ffd23f', 0, 3],
-      ['test-cube-4', 'Test cube 4', '#9b7bff', 4, 2],
-      ['test-cube-5', 'Test cube 5', '#7bdc6b', -2, -5],
-    ]
-    for (const [id, label, color, x, z] of placeholders) {
-      const item = new PlaceholderItem(id, label, color, x, z)
-      this.items.push(item)
-      this.scene.add(item.object)
-      this.pickups.register(item)
-    }
-
     this.updateCamera(1)
 
     this.resizeObserver = new ResizeObserver(this.resize)
@@ -109,17 +85,11 @@ export class PlayerSandbox {
     this.frameId = requestAnimationFrame(this.tick)
   }
 
-  /** Subscribe to backpack changes. Returns an unsubscribe function. */
-  onBackpackChange(listener: BackpackListener): () => void {
-    return this.backpack.onChange(listener)
-  }
-
   dispose(): void {
     cancelAnimationFrame(this.frameId)
     this.resizeObserver.disconnect()
     this.input.dispose()
     this.player.dispose()
-    for (const item of this.items) item.dispose()
     this.grid.dispose()
     this.shadowCatcher.geometry.dispose()
     this.shadowCatcher.material.dispose()
@@ -133,8 +103,6 @@ export class PlayerSandbox {
     this.elapsed += delta
 
     this.player.update(delta, this.elapsed, this.input.getMoveDirection())
-    if (this.input.consumePickupPress()) this.pickups.tryPickUp()
-    for (const item of this.items) item.update(this.elapsed)
 
     this.updateCamera(1 - Math.exp(-CAMERA_FOLLOW_SPEED * delta))
     this.updateSun()

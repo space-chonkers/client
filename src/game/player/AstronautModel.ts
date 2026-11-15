@@ -1,6 +1,35 @@
 import * as THREE from 'three'
 
 /**
+ * Default astronaut colors. Edit these to change the look of every astronaut.
+ * Only `suit` can be customized per player (see AstronautOptions).
+ */
+export const ASTRONAUT_COLORS = {
+  /** Body, helmet, arms, legs, backpack. */
+  suit: '#f1f3f5',
+  /** Neck ring, hips, gloves, shoulder tanks, chest panel, ear discs. */
+  joints: '#b9c0ca',
+  /** Stripes, belt, knee rings, backpack band. */
+  accent: '#ff6b2c',
+  /** Boots and antenna. */
+  dark: '#3b4048',
+  /** Helmet glass. Its glow is a darker shade of this color. */
+  visor: '#1d3b73',
+  /** Small glowing lights; each glows in its own color. */
+  lightGreen: '#4dffb5',
+  lightOrange: '#ffb347',
+  lightCyan: '#5ad8ff',
+} as const
+
+/** How bright the visor glow is, relative to the visor color (0..1). */
+const VISOR_GLOW_SHADE = 0.35
+
+export type AstronautOptions = {
+  /** Main suit color (body, helmet, arms, legs, backpack). */
+  suitColor?: THREE.ColorRepresentation
+}
+
+/**
  * Low-poly astronaut built from flat-shaded primitives.
  *
  * The model faces +Z. Limbs hang from named pivot groups (hips, shoulders,
@@ -23,23 +52,36 @@ export class AstronautModel {
   private readonly materials: THREE.Material[] = []
 
   private readonly mat = {
-    suit: this.material({ color: '#f1f3f5', roughness: 0.75 }),
-    shade: this.material({ color: '#b9c0ca', roughness: 0.6, metalness: 0.2 }),
-    accent: this.material({ color: '#ff6b2c', roughness: 0.5 }),
-    dark: this.material({ color: '#3b4048', roughness: 0.8 }),
+    suit: this.material({ color: ASTRONAUT_COLORS.suit, roughness: 0.75 }),
+    shade: this.material({ color: ASTRONAUT_COLORS.joints, roughness: 0.6, metalness: 0.2 }),
+    accent: this.material({ color: ASTRONAUT_COLORS.accent, roughness: 0.5 }),
+    dark: this.material({ color: ASTRONAUT_COLORS.dark, roughness: 0.8 }),
     visor: this.material({
-      color: '#1d3b73',
+      color: ASTRONAUT_COLORS.visor,
       roughness: 0.15,
       metalness: 0.85,
-      emissive: '#0a1c3d',
+      emissive: new THREE.Color(ASTRONAUT_COLORS.visor).multiplyScalar(VISOR_GLOW_SHADE),
       emissiveIntensity: 0.6,
     }),
-    lightGreen: this.material({ color: '#4dffb5', emissive: '#4dffb5', emissiveIntensity: 1.2 }),
-    lightOrange: this.material({ color: '#ffb347', emissive: '#ffb347', emissiveIntensity: 1.2 }),
-    lightCyan: this.material({ color: '#5ad8ff', emissive: '#5ad8ff', emissiveIntensity: 1.2 }),
+    lightGreen: this.material({
+      color: ASTRONAUT_COLORS.lightGreen,
+      emissive: ASTRONAUT_COLORS.lightGreen,
+      emissiveIntensity: 1.2,
+    }),
+    lightOrange: this.material({
+      color: ASTRONAUT_COLORS.lightOrange,
+      emissive: ASTRONAUT_COLORS.lightOrange,
+      emissiveIntensity: 1.2,
+    }),
+    lightCyan: this.material({
+      color: ASTRONAUT_COLORS.lightCyan,
+      emissive: ASTRONAUT_COLORS.lightCyan,
+      emissiveIntensity: 1.2,
+    }),
   }
 
-  constructor() {
+  constructor(options: AstronautOptions = {}) {
+    if (options.suitColor !== undefined) this.setSuitColor(options.suitColor)
     this.root.name = 'Astronaut'
     this.body.name = 'body'
     this.root.add(this.body)
@@ -58,29 +100,31 @@ export class AstronautModel {
     })
   }
 
+  /** Change the main suit color. Can be called at any time. */
+  setSuitColor(color: THREE.ColorRepresentation): void {
+    this.mat.suit.color.set(color)
+  }
+
   /**
    * Apply a procedural pose.
    * @param walkPhase  advancing stride angle (radians)
    * @param moving     0 = standing, 1 = full walk speed
    * @param elapsed    seconds since start, for idle motion
-   * @param reach      0..1 strength of the "reach forward to pick up" gesture
    */
-  pose(walkPhase: number, moving: number, elapsed: number, reach: number): void {
+  pose(walkPhase: number, moving: number, elapsed: number): void {
     const stride = Math.sin(walkPhase) * 0.65 * moving
     this.leftLeg.rotation.x = stride
     this.rightLeg.rotation.x = -stride
 
     const armSwing = stride * 0.8
-    const reachAngle = -1.25 * reach
-    this.leftArm.rotation.x = THREE.MathUtils.lerp(-armSwing, reachAngle, reach)
-    this.rightArm.rotation.x = THREE.MathUtils.lerp(armSwing, reachAngle, reach)
+    this.leftArm.rotation.x = -armSwing
+    this.rightArm.rotation.x = armSwing
 
     const stepBounce = Math.abs(Math.sin(walkPhase)) * 0.07 * moving
     const breathe = Math.sin(elapsed * 2.2) * 0.012 * (1 - moving)
-    this.body.position.y = stepBounce + breathe - 0.1 * reach
-    this.body.rotation.x = 0.06 * moving + 0.25 * reach
+    this.body.position.y = stepBounce + breathe
+    this.body.rotation.x = 0.06 * moving
 
-    this.head.rotation.x = 0.2 * reach
     this.head.rotation.z = Math.sin(walkPhase) * 0.04 * moving
   }
 
