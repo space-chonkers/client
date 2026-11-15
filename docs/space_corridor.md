@@ -1,18 +1,18 @@
-# Space Corridor (`SpaceCorridor.tsx`)
+# Space Corridor & Temporary Corridor Grid (`SpaceCorridor.tsx` & `CorridorGrid.ts`)
 
 ## 1. Overview
 
-`SpaceCorridor` provides low-poly, roofless 3D corridor meshes and spatial grid utilities for Layer `0` structures in the `50x50` world map. It enables top-down camera visibility inside base modules while clearly indicating open exits and closed walls using a Tritanopia-friendly palette.
+`SpaceCorridor` provides low-poly, roofless 3D corridor meshes and spatial grid utilities for Layer `0` structures in the `50x50` world map. `CorridorGrid` manages a temporary logical grid in the client that places corridor tiles at integer `(gridX, gridZ)` coordinates and automatically selects and rotates wall variants (`0, 1, 2` straight/corner, or `3` walls) based on occupied cardinal neighbors.
 
 ### Objectives
 - Define world grid dimensions (`50x50`) and 3D spatial layer constants (`-1`, `0`, `1`).
 - Construct roofless low-poly `THREE.Group` corridor segments for 0, 1, 2, or 3 lateral walls (including straight and corner 2-wall configurations).
 - Render directional floor guide strips only toward open cardinal exits.
-- Provide a standalone React preview component for inspecting corridor variants.
+- Automatically orient corridor walls and open floor guides on a grid (`CorridorGrid`) when tiles are placed or removed.
 
 ### Scope
-- **Included:** Spatial coordinate helpers, Tritanopia-safe color palette (`CORRIDOR_PALETTE`), procedural `THREE.Group` corridor builders, and the `<SpaceCorridor />` preview component.
-- **Excluded:** Server-side tile validation, dynamic neighbor auto-tiling state, and Layer `-1` / Layer `1` entity management.
+- **Included:** Spatial coordinate helpers, Tritanopia-safe color palette (`CORRIDOR_PALETTE`), procedural `THREE.Group` corridor builders, `CorridorGrid` auto-tiling manager, and integration inside `PlayerSandbox.ts`.
+- **Excluded:** Authoritative server-side tile validation and Layer `-1` terrain generation.
 
 ## 2. Architecture
 
@@ -20,21 +20,27 @@
 
 ```text
 src/
-└── assets/
-    └── SpaceCorridor.tsx
+├── assets/
+│   └── SpaceCorridor.tsx
+└── game/
+    ├── PlayerSandbox.ts
+    └── corridor/
+        └── CorridorGrid.ts
 ```
 
 ### Architectural Responsibilities
 - `SpaceCorridor.tsx` isolates procedural Three.js geometry construction and coordinate math from React state and networking layers.
-- Game scenes can import the pure factory functions (`createCorridorSegment`, `createCrossCorridor`, etc.) directly into a Three.js scene graph, or mount `<SpaceCorridor />` as an isolated React canvas preview.
+- `CorridorGrid.ts` maintains the set of occupied `(gridX, gridZ)` tiles in Layer `0`, resolves neighbor connectivity (`north`, `south`, `east`, `west`), and rebuilds affected tile meshes when tiles are added or removed.
+- `PlayerSandbox.ts` mounts `CorridorGrid` with an initial connected base around `(0, 0)` and allows live testing via `E` or `Space`.
 
 ## 3. Implementation Details
 
-### Components
+### Components and Classes
 
-| Component | Responsibility |
+| Name | Responsibility |
 |---|---|
-| `SpaceCorridor` | Mounts a Three.js `WebGLRenderer` canvas that displays and rotates a row of requested corridor wall variants (`variants = [0, 1, 2, 3]`) and disposes GPU resources on unmount. |
+| `SpaceCorridor` | Standalone Three.js `WebGLRenderer` preview component that displays and rotates requested corridor wall variants. |
+| `CorridorGrid` | Manages placed Layer `0` corridor tiles in a Three.js scene and updates adjacent neighbor walls automatically. |
 
 ### Utilities
 
@@ -48,35 +54,39 @@ src/
 | `createStraightCorridorSegment()` | Shortcut for `createCorridorSegment(2, false)` (west and east walls, north-south passage). |
 | `createCornerCorridor()` | Shortcut for `createCorridorSegment(2, true)` (north and west walls, south-east L-corner). |
 | `createBorderCorridor()` | Shortcut for `createCorridorSegment(3)` (north, west, and east walls, 1 south exit). |
+| `resolveCorridorOrientation(openSides)` | Pure helper that maps a `ReadonlySet<CardinalSide>` of connected neighbors to `{ wallCount, isCorner, rotationY }`. |
 
 ### Types and Interfaces
 
 - `SpatialLayer`: `-1 | 0 | 1` derived from `SPATIAL_LAYERS` (`TERRAIN: -1`, `STRUCTURES: 0`, `ENTITIES: 1`).
 - `CorridorWallVariant`: `0 | 1 | 2 | 3` lateral wall count.
 - `CardinalSide`: `'north' | 'south' | 'east' | 'west'`.
-- `SpaceCorridorProps`: `{ variants?: CorridorWallVariant[] }`.
+- `ConstructionKind`: `'base_tile' | 'stash'`.
+- `ConstructionPayload`: `{ id: string; kind: ConstructionKind; cellX: number; cellY: number }`.
+- `CorridorOrientation`: `{ wallCount: CorridorWallVariant; isCorner: boolean; rotationY: number }`.
 
 ## 4. Business Logic
 
 ### Main Workflow
 1. Resolve the vertical position of the segment at `SPATIAL_LAYERS.STRUCTURES` (`Y = 0`).
-2. Create the metallic floor deck (`0.88 x 0.08 x 0.88`) and four corner structural posts.
+2. Create the metallic floor deck (`1.0 x 0.08 x 1.0`) occupying 100% of the `1x1` tile and four corner structural posts at `(±0.45, ±0.45)`.
 3. Determine which cardinal sides receive closed walls based on `wallCount` (`0..3`) and `isCorner`.
-4. Attach hull walls and high-contrast coral marker caps (`#ff595e`) on closed sides.
+4. Attach hull walls and high-contrast coral marker caps (`#ff595e`) flush with the `1x1` tile borders on closed sides.
 5. Render a center floor node and extend cyan-teal floor guide arms (`#00a896`) exclusively toward open cardinal sides.
+6. In `PlayerSandbox`, `CorridorGrid.constrainMovement` prevents the `0.55`-scaled astronaut from passing through closed corridor walls or corner pillars.
 
 ### Business Rules
-- World coordinates are strictly clamped within `MAP_GRID_WIDTH = 50` and `MAP_GRID_HEIGHT = 50`.
+- A side shared with an adjacent corridor tile is always open (no wall, floor guide arm extended).
+- A side without an adjacent corridor tile is closed with a hull wall and coral marker cap (`#ff595e`).
 - All roofs are omitted so top-down cameras can see inside corridors.
-- Colors follow `CORRIDOR_PALETTE` to remain distinguishable for players with Tritanopia.
 
 ## 5. Data Management
 
 ### Data Sources
-- Static constants (`MAP_GRID_WIDTH`, `MAP_GRID_HEIGHT`, `SPATIAL_LAYERS`, `LAYER_VERTICAL_STEP`, `CORRIDOR_PALETTE`) and component props (`variants`).
+- Static constants (`MAP_GRID_WIDTH`, `MAP_GRID_HEIGHT`, `SPATIAL_LAYERS`, `CORRIDOR_PALETTE`, `INITIAL_CORRIDOR_TILES`) and interactive sandbox keyboard input (`KeyE`, `Space`).
 
 ### State Management
-- Stateless procedural factories; the React preview component holds only a `useRef<HTMLDivElement>` for its Three.js canvas container.
+- `CorridorGrid` stores active tile meshes in an internal `Map<string, THREE.Group>` keyed by `"x,z"`.
 
 ## 6. API and Integrations
 
@@ -90,8 +100,9 @@ No environment variables are required.
 
 | Scenario | Expected Behavior |
 |---|---|
-| Out-of-bounds grid coordinates | `gridToWorldPosition` clamps `gridX` and `gridZ` to `[0, 49]`. |
-| Zero-sized container on mount/resize | `resize()` checks `width === 0 \|\| height === 0` and skips projection updates until valid dimensions exist. |
+| Duplicate tile placement at `(x, z)` | `placeTile` returns `false` without recreating meshes. |
+| Removing a non-existent tile | `removeTile` returns `false` safely. |
+| Target cell outside sandbox bounds | `PlayerSandbox` ignores `E`/`Space` placement requests outside `[-half, half]`. |
 
 ## 9. Security Considerations
 
@@ -99,8 +110,8 @@ No user credentials, network inputs, or external resources are processed.
 
 ## 10. Performance Considerations
 
-- `renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))` caps pixel density to avoid excessive GPU fill-rate cost.
-- On component unmount, the `useEffect` cleanup cancels the animation frame, disconnects the `ResizeObserver`, and disposes all mesh geometries, materials, and the `WebGLRenderer`.
+- Only the modified tile `(x, z)` and its 4 immediate cardinal neighbors are rebuilt when a tile is placed or removed.
+- Previous `THREE.Group` meshes have their geometries and materials disposed immediately on rebuild and on `CorridorGrid.dispose()`.
 
 ## 11. Testing
 
@@ -115,19 +126,20 @@ bun run build
 
 | Dependency | Purpose |
 |---|---|
-| `react` | Component lifecycle (`useEffect`, `useRef`) for the preview canvas |
+| `react` | Component lifecycle (`useEffect`, `useRef`) for `<SpaceCorridor />` |
 | `three` | 3D scene graph, geometries, materials, lights, and WebGL rendering |
 
 ## 13. Known Limitations
 
-- `createCorridorSegment` places walls in fixed canonical orientations; callers must rotate the returned `THREE.Group` around the `Y` axis (`Math.PI / 2` increments) to orient T-junctions, corners, or dead-ends toward arbitrary directions.
+- `CorridorGrid` currently holds client-side sandbox state until connected to the authoritative `WorldMap` state from the server.
 
 ## 14. Future Improvements
 
-- Add helper utilities that accept a bitmask or set of open neighbor directions (`Set<CardinalSide>`) and automatically apply the appropriate rotation.
+- Synchronize `CorridorGrid` with authoritative server `Tile` construction updates and deduct construction resource costs on expansion.
 
 ## 15. Change History
 
 | Date | Version | Description |
 |---|---|---|
 | 2026-11-14 | 1.0.0 | Initial documentation of `SpaceCorridor.tsx` |
+| 2026-11-15 | 1.1.0 | Added `CorridorGrid` auto-tiling manager and `PlayerSandbox` integration |
