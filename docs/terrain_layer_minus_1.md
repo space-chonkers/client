@@ -215,6 +215,10 @@ so Bun and Node globals stay out of browser code. Fixtures in
 - 51×51 corner samples → 50×50 cells, sample order and orientation;
 - normalization: range, spike robustness, flat ground;
 - validation and NoData rejection;
+- the backend handoff files in `docs/mars_terrain_contract/`: both synthetic
+  examples pass the parser and match the synthetic generator exactly; the JSON
+  Schema, compiled with Ajv (dev dependency), accepts both; and the schema plus
+  the cross-field checks agree with the parser on representative invalid payloads;
 - true-scale rendering and determinism of real-elevation maps;
 - coordinate conversions: the 0°/360° meridian both ways, high latitudes, polar
   rejection and invalid inputs;

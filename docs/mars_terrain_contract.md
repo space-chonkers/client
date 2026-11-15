@@ -2,8 +2,12 @@
 
 **Status:** proposal. The client can consume this payload today; no backend
 serves it yet. Decided for v1: seed ownership (§2), the horizontal convention
-(§3) and NoData rejection (§4). Field names and the datum identifier still need
-agreement with the backend team before Phase 4B (§7).
+(§3) and NoData rejection (§4). Three backend decisions remain open (§9): the
+datum, the resampling method, and transport and errors. Field names still need
+the backend team's agreement before Phase 4B.
+
+Backend handoff files are in [`mars_terrain_contract/`](mars_terrain_contract/):
+a JSON Schema and two synthetic example payloads (§7).
 
 ## 1. Purpose
 
@@ -149,17 +153,186 @@ geographic ↔ local:
 Placing a geographic point (a future point of interest) on the map is left to the
 change that introduces points of interest.
 
-## 7. Open questions for the backend team
+## 7. Schema and example payloads
 
-Still open; none blocks the client:
+| File | What it is |
+|---|---|
+| `mars_terrain_data.v1.schema.json` | JSON Schema (draft 2020-12) for the payload. |
+| `synthetic_2x2.v1.json` | A small 2 × 2-cell (3 × 3-sample) payload you can read by eye. |
+| `synthetic_50x50.v1.json` | The full Phase 4A size: 50 × 50 cells, 51 × 51 = 2,601 samples. |
 
-1. The exact `datum` identifier, and whether a single datum is guaranteed. The
-   client only stores it.
-2. The resampling method from DTM to the 10 m grid (for example bilinear
-   or area-average), and who documents it. The grid geometry itself is fixed by §3.
-3. The transport and error format (out of scope for the client contract).
+**The examples are synthetic.** Every elevation comes from the formula
+`-4000 + 2 × column − 3 × row` (a tilted plane). The centre (10° N, 20° E) is an
+arbitrary round number. The datum, dataset and provider strings are labelled
+synthetic. Nothing in them is real Martian terrain or NASA/HiRISE data. They are
+for checking format and orientation only. Sample 0 is the north-west corner, so
+values rise to the east and fall to the south.
 
-Decided for v1 (the backend team confirms when implementing):
+The TypeScript parser (`parseMarsTerrainData`) stays the source of truth.
+`tests/terrain/marsTerrainContractArtifacts.test.ts` checks that:
+
+- both examples pass the parser and are exactly what `syntheticMarsTerrain` produces;
+- the schema's bounds and required fields match the parser;
+- the real schema, compiled with Ajv (draft 2020-12), accepts both examples;
+- on representative valid and invalid payloads, the schema plus the two code
+  rules below give the same verdict as the parser.
+
+**What the schema cannot check.** JSON Schema cannot compare two fields, so two
+parser rules have to be checked in code (§8):
+
+1. `elevation.columns == grid.columns + 1` and `elevation.rows == grid.rows + 1`.
+2. `len(elevation.samplesMeters) == elevation.columns × elevation.rows`.
+
+Like the parser, the schema allows extra fields. Optional `source.productId`
+must be left out when there is none; `null` is rejected.
+
+## 8. Validating payloads in the Go backend
+
+Validate each payload the way it will be sent: encode it to JSON first, then
+check those bytes against the schema and the two code rules above. The example
+below uses
+[`github.com/santhosh-tekuri/jsonschema/v6`](https://github.com/santhosh-tekuri/jsonschema),
+which supports draft 2020-12. This Go code was compiled and run once against
+both examples and 34 accepted and rejected payloads, and it agreed with the
+TypeScript parser on every one. The client test suite repeats the same check
+automatically with Ajv, but it does not run the Go code.
+
+```go
+package terrain
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+)
+
+// MarsTerrainValidator checks payloads against mars_terrain_data.v1.schema.json
+// plus the cross-field rules JSON Schema cannot express.
+type MarsTerrainValidator struct{ schema *jsonschema.Schema }
+
+func NewMarsTerrainValidator(schemaJSON []byte) (*MarsTerrainValidator, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
+	if err != nil {
+		return nil, fmt.Errorf("parse schema: %w", err)
+	}
+	const url = "urn:space-chonkers:mars-terrain-data:v1"
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(url, doc); err != nil {
+		return nil, fmt.Errorf("add schema: %w", err)
+	}
+	schema, err := c.Compile(url)
+	if err != nil {
+		return nil, fmt.Errorf("compile schema: %w", err)
+	}
+	return &MarsTerrainValidator{schema: schema}, nil
+}
+
+// Validate checks one encoded payload exactly as it will be sent.
+func (v *MarsTerrainValidator) Validate(payload []byte) error {
+	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("payload is not JSON: %w", err)
+	}
+	if err := v.schema.Validate(inst); err != nil {
+		return fmt.Errorf("schema: %w", err)
+	}
+	// The schema passed, so these fields exist with the right types.
+	var shape struct {
+		Grid      struct{ Columns, Rows int }
+		Elevation struct {
+			Columns, Rows int
+			SamplesMeters []float64
+		}
+	}
+	if err := json.Unmarshal(payload, &shape); err != nil {
+		return fmt.Errorf("decode shape: %w", err)
+	}
+	g, e := shape.Grid, shape.Elevation
+	if e.Columns != g.Columns+1 || e.Rows != g.Rows+1 {
+		return fmt.Errorf("elevation must be %dx%d corner samples, got %dx%d", g.Columns+1, g.Rows+1, e.Columns, e.Rows)
+	}
+	if len(e.SamplesMeters) != e.Columns*e.Rows {
+		return fmt.Errorf("elevation.samplesMeters has %d values, expected %d", len(e.SamplesMeters), e.Columns*e.Rows)
+	}
+	return nil
+}
+```
+
+Suggested use:
+
+- **Backend tests:** run `Validate` on both example files as known-good inputs,
+  and on every payload your generator produces.
+- **Encoding in Go:**
+  - Declare `productId` as `*string` with `json:",omitempty"` so a missing value
+    is left out rather than sent as `null`.
+  - `encoding/json` refuses to encode `NaN` and `±Inf`, so a NoData sample fails
+    at encoding time instead of reaching the client.
+- **Whitespace edge case:** the schema's `\S` pattern only rejects ASCII
+  whitespace when Go's `regexp` runs it. A string made only of Unicode spaces
+  (for example U+00A0) would pass in Go but be rejected by the client, which
+  uses `trim()`. Don't generate such strings.
+
+## 9. Open backend decisions
+
+These three questions have to be settled with the backend team before Phase 4B.
+None of them blocks the client today. The client code and the schema already
+cover every other part of the payload.
+
+### 1. Elevation datum identifier and meaning
+
+- **To decide:**
+  - The exact string sent in `elevation.datum`.
+  - The vertical surface it names (for example the Mars areoid used by the
+    source DTMs).
+  - Whether v1 always uses a single datum. If so, the schema can pin it with
+    `const`.
+- **Client today:** requires a non-empty string, stores it as is on
+  `map.elevation.geo.datum`, and never converts between datums.
+- **Why it matters:** rendered heights are relative to the map's median sample,
+  so a constant offset doesn't change what is drawn. But `samplesMeters` and
+  `TerrainCell.elevationMeters` are only meaningful against a known surface.
+  Mixing datums would make two maps' metres incomparable.
+
+### 2. DTM resampling and interpolation
+
+- **Fixed already (§3):** the grid geometry, meaning where every sample sits.
+- **To decide:**
+  - How the backend computes the elevation at each sample point from the source
+    DTM: bilinear, bicubic, nearest-neighbour, or an area-average over each
+    sample's 10 m footprint.
+  - How it handles a source resolution finer or coarser than the grid
+    (`source.resolutionMeters` vs `grid.cellSizeMeters`).
+  - Whether the method is recorded in the payload, for example as a provenance
+    field in a later version.
+- **Client today:** doesn't depend on the method. It averages each cell's four
+  corners and interpolates bilinearly between corners when drawing (§5).
+- **Why it matters:** an area-average smooths short features. Point
+  interpolation keeps them but can alias. The same request should also always
+  return the same samples.
+
+### 3. Transport endpoint and error-response format
+
+- **To decide:**
+  - The endpoint path and method, and the request parameters (for example
+    `center`, `seed`, or a location id).
+  - Content type and compression. The full payload is about 19 KB of JSON
+    before compression.
+  - Caching.
+  - The HTTP status codes and error body for cases such as "no DTM coverage at
+    this location", "invalid request" and "upstream unavailable".
+- **Client today:** has no network code for this contract, so nothing calls
+  `createReliefMapFromMarsTerrain` yet. `MarsTerrainDataError` is the client's
+  own validation error for a payload it received. It is not a server error
+  format, and the server shouldn't reuse it.
+- **Why it matters:** the client needs to tell "retry later" apart from "this
+  location can never be served" to choose between retrying and falling back to
+  a procedural map.
+
+### Decided for v1
+
+The backend team confirms these when implementing:
 
 - NoData: incomplete tiles are rejected (§4).
 - Seed: owned by the backend (§2).
