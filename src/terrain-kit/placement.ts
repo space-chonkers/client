@@ -5,7 +5,7 @@ import type { TerrainSurface } from './terrain'
 /**
  * Grounds assets on the *rendered* terrain ({@link TerrainSurface}), never on
  * the analytic field: the faceted mesh can sit above or below the field
- * between vertices, which is what used to bury deposits.
+ * between vertices.
  */
 
 export interface PlacementOptions {
@@ -29,16 +29,10 @@ export interface PlacementOptions {
   maxBuried?: number
 }
 
-export interface Footprint {
-  /** Horizontal reach from the origin, in world units. */
-  radius: number
-  height: number
-}
-
 const _box = new THREE.Box3()
 
-/** Footprint of an object at its current scale (position and rotation ignored). */
-export function measureFootprint(object: THREE.Object3D): Footprint {
+/** Horizontal reach of an object from its origin at its current scale (position and rotation ignored). */
+function footprintRadius(object: THREE.Object3D): number {
   const { position, quaternion } = object
   const saved = { position: position.clone(), quaternion: quaternion.clone() }
   position.set(0, 0, 0)
@@ -48,10 +42,7 @@ export function measureFootprint(object: THREE.Object3D): Footprint {
   position.copy(saved.position)
   quaternion.copy(saved.quaternion)
   object.updateMatrixWorld(true)
-  return {
-    radius: Math.max(-_box.min.x, _box.max.x, -_box.min.z, _box.max.z, 0.05),
-    height: _box.max.y,
-  }
+  return Math.max(-_box.min.x, _box.max.x, -_box.min.z, _box.max.z, 0.05)
 }
 
 /** Contact samples: centre plus two rings, symmetric so the plane fit stays simple. */
@@ -68,7 +59,7 @@ export function placeOnSurface(
   candidates: readonly { x: number; z: number }[],
   { mode = 'rest', rotationY = 0, maxTilt = 0, maxRoughness = Infinity, maxDrop = Infinity, maxBuried = 1 }: PlacementOptions = {},
 ): boolean {
-  const { radius } = measureFootprint(object)
+  const radius = footprintRadius(object)
   const spin = new THREE.Quaternion().setFromAxisAngle(UP, rotationY)
   const tilt = new THREE.Quaternion()
   const normal = new THREE.Vector3()

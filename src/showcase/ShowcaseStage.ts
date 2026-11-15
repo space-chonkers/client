@@ -6,50 +6,12 @@ import { disposeSharedMaterials } from '../terrain-kit/palette'
 import type { ReliefMap } from '../terrain-kit/reliefMap'
 import { buildAssetGallery } from './assetGallery'
 import { buildTerrainLayerView } from './terrainLayerView'
+import type { CameraPreset, DebugState, ShowcaseContent, StageStats, ViewMode } from './types'
 
-export type ViewMode = 'terrain' | 'assets'
-export type CameraPreset = 'iso' | 'top' | 'front' | 'low'
-/** terrain: final render · relief: per-cell relief heatmap draped on it · data: raw cell values as columns. */
-export type RenderMode = 'terrain' | 'relief' | 'data'
-
-export interface DebugState {
-  mode: RenderMode
-  grid: boolean
-  values: boolean
-}
-
-export interface ShowcaseContent {
-  root: THREE.Object3D
-  /** World-space bounds used to frame the camera and fit the shadow map. */
-  bounds: THREE.Box3
-  /** Height of the surface the content rests on; receives its drop shadow. */
-  floorY: number
-  /** Layer −1 cell data behind the view, when it has any. */
-  reliefMap?: ReliefMap
-  /** Extra facts for the stats readout and diagnostics. */
-  info?: Record<string, number | string>
-  applyDebug?(debug: DebugState): void
-  highlightCell?(cell: { col: number; row: number } | null): void
-  /** World position of a cell's surface centre, for camera focusing. */
-  locateCell?(cell: { col: number; row: number }): THREE.Vector3
-  /** Called when the orbit target or camera distance changes noticeably. */
-  onViewChange?(target: THREE.Vector3, distance: number): void
-}
-
-export interface StageStats {
-  fps: number
-  drawCalls: number
-  triangles: number
-  geometries: number
-  buildMs: number
-  info: Record<string, number | string>
-}
-
-declare global {
-  interface Window {
-    /** Profiling hook (see the debug-profiler playbook): renderer counters plus stage state. */
-    __THREE_GAME_DIAGNOSTICS__?: { renderer: THREE.WebGLInfo; readonly state: StageStats }
-  }
+/** One content builder per view; adding a view means adding an entry here. */
+const VIEW_BUILDERS: Record<ViewMode, (seed: number) => ShowcaseContent> = {
+  terrain: buildTerrainLayerView,
+  assets: buildAssetGallery,
 }
 
 /**
@@ -192,23 +154,14 @@ export class ShowcaseStage {
     this.resize()
 
     this.renderer.setAnimationLoop((timestamp) => this.frame(timestamp))
-
-    const stage = this
-    window.__THREE_GAME_DIAGNOSTICS__ = {
-      renderer: this.renderer.info,
-      get state() {
-        return stage.getStats()
-      },
-    }
   }
 
   getStats(): StageStats {
-    const { render, memory } = this.renderer.info
+    const { render } = this.renderer.info
     return {
       fps: Math.round(this.fps),
       drawCalls: render.calls,
       triangles: render.triangles,
-      geometries: memory.geometries,
       buildMs: Math.round(this.buildMs),
       info: this.content?.info ?? {},
     }
@@ -221,7 +174,7 @@ export class ShowcaseStage {
   load(view: ViewMode, seed: number): ReliefMap | null {
     this.clearContent()
     const start = performance.now()
-    const content = view === 'terrain' ? buildTerrainLayerView(seed) : buildAssetGallery(seed)
+    const content = VIEW_BUILDERS[view](seed)
     this.buildMs = performance.now() - start
     this.content = content
     this.scene.add(content.root)
@@ -332,7 +285,6 @@ export class ShowcaseStage {
     this.renderer.dispose()
     this.renderer.domElement.remove()
     this.labelRenderer.domElement.remove()
-    delete window.__THREE_GAME_DIAGNOSTICS__
   }
 
   private clearContent(): void {

@@ -5,8 +5,8 @@ import { createGridOverlay } from './gridOverlay'
 import { materials } from '../terrain-kit/palette'
 import { MINERAL_FEATURES, MAP_SIZE, cellAt, generateReliefMap } from '../terrain-kit/reliefMap'
 import { createReliefTerrain } from '../terrain-kit/reliefTerrain'
-import type { GridSpec } from '../terrain-kit/terrain'
-import type { DebugState, RenderMode, ShowcaseContent } from './ShowcaseStage'
+import { cellCenter, type GridSpec } from '../terrain-kit/terrain'
+import type { DebugState, RenderMode, ShowcaseContent } from './types'
 
 const CELL_SIZE = 1
 const SKIRT_DEPTH = 1.7
@@ -56,13 +56,9 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
     col: THREE.MathUtils.clamp(Math.floor(x / CELL_SIZE + map.cols / 2), 0, map.cols - 1),
     row: THREE.MathUtils.clamp(Math.floor(z / CELL_SIZE + map.rows / 2), 0, map.rows - 1),
   })
-  const centerOf = (col: number, row: number) => ({
-    x: (col + 0.5 - map.cols / 2) * CELL_SIZE,
-    z: (row + 0.5 - map.rows / 2) * CELL_SIZE,
-  })
   const surfaceY = (col: number, row: number, mode: RenderMode) => {
     if (mode === 'data') return cellAt(map, col, row).relief * DATA_SCALE
-    const { x, z } = centerOf(col, row)
+    const { x, z } = cellCenter(grid, col, row)
     return surface.heightAt(x, z)
   }
 
@@ -118,7 +114,7 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
     map.cells.forEach((cell, index) => {
       const top = cell.relief * DATA_SCALE
       const height = top + SKIRT_DEPTH
-      const { x, z } = centerOf(cell.col, cell.row)
+      const { x, z } = cellCenter(grid, cell.col, cell.row)
       matrix.makeScale(1, height, 1).setPosition(x, top - height / 2, z)
       columns!.setMatrixAt(index, matrix)
       columns!.setColorAt(index, reliefColor(cell.relief, color))
@@ -156,7 +152,7 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
       const element = (label as CSS2DObject).element
       element.textContent = relief.toFixed(2)
       element.style.borderColor = reliefHex(relief)
-      const { x, z } = centerOf(col, row)
+      const { x, z } = cellCenter(grid, col, row)
       label.position.set(x, surfaceY(col, row, mode) + (mode === 'data' ? 0.12 : 0.22), z)
     })
   }
@@ -207,7 +203,6 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
     floorY: -SKIRT_DEPTH,
     reliefMap: map,
     info: {
-      cells: map.cells.length,
       deposits: MINERAL_FEATURES.map((kind) => `${kind} ${placedMinerals[kind]}`).join(' · '),
     },
     applyDebug(debug: DebugState) {
@@ -229,7 +224,7 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
       drawHighlight()
     },
     locateCell({ col, row }) {
-      const { x, z } = centerOf(col, row)
+      const { x, z } = cellCenter(grid, col, row)
       return new THREE.Vector3(x, surfaceY(col, row, mode), z)
     },
     onViewChange(target, distance) {

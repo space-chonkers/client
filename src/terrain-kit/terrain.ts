@@ -161,14 +161,10 @@ function triangleHeight(p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3, x:
 }
 
 /**
- * Builds a cohesive, faceted landscape over a logical grid. Vertices are jittered
- * and triangulation directions vary so the cell structure never reads as tiles.
+ * Builds a cohesive, faceted landscape over a logical grid, with its exact
+ * surface sampler and chunk meshes. Vertices are jittered and triangulation
+ * directions vary so the cell structure never reads as tiles.
  */
-export function createTerrain(options: TerrainOptions): THREE.Group {
-  return buildTerrain(options).group
-}
-
-/** {@link createTerrain} plus the exact surface sampler and the chunk meshes. */
 export function buildTerrain({ grid, field, seed, subdivisions = 3, skirtDepth = 1.2, chunkCells = 0 }: TerrainOptions): BuiltTerrain {
   const step = grid.cellSize / subdivisions
   const nx = grid.cols * subdivisions

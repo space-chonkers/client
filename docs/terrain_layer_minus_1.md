@@ -25,7 +25,9 @@ Excluded: gameplay, Layer 0/1, networking, real Martian elevation data, Points o
 src/
 ├── terrain-kit/              # Production code: no UI, no debug tooling
 │   ├── reliefMap.ts          # Cell model, relief generation, classification (no Three.js)
+│   ├── craters.ts            # Crater kinds, shapes, population, carving (no Three.js)
 │   ├── mineralDistribution.ts# Where mineral families may occur (no Three.js)
+│   ├── reliefField.ts        # ReliefMap → continuous height, surface mix and shading
 │   ├── reliefTerrain.ts      # ReliefMap → chunked terrain + baked dressing
 │   ├── terrain.ts            # Generic height-field meshing, surface types, crack decals
 │   ├── placement.ts          # Grounds assets on the rendered surface
@@ -37,15 +39,17 @@ src/
 │   ├── noise.ts              # Seeded RNG, hashing, noise
 │   └── dispose.ts            # GPU resource cleanup
 └── showcase/                 # Development-only tooling (never in production builds)
-    ├── TerrainShowcase.tsx   # Control panel, relief minimap, cell inspector
+    ├── TerrainShowcase.tsx   # Control panel and cell inspector
+    ├── ReliefMinimap.tsx     # Relief heatmap minimap (hover to inspect, click to focus)
     ├── ShowcaseStage.ts      # Renderer, camera, lights, render loop
+    ├── types.ts              # Contracts shared by the stage, views and panel
     ├── terrainLayerView.ts   # Full map with debug views (relief tint, data columns, labels)
     ├── assetGallery.ts       # Every kit asset on a plinth
     ├── gridOverlay.ts        # Cell-boundary overlay
     └── showcase.css
 ```
 
-Dependency direction: `reliefMap.ts` and `mineralDistribution.ts` are pure data;
+Dependency direction: `reliefMap.ts`, `craters.ts` and `mineralDistribution.ts` are pure data;
 everything that builds meshes depends on them, never the reverse.
 
 ## 3. Implementation Details

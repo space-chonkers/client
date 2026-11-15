@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { facetize, merge, mergeVertices, placement } from './geometry'
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
+import { facetize, merge, placement } from './geometry'
 import { createRng, hash, hash01, smoothstep } from './noise'
 import { PALETTE, materials } from './palette'
 
@@ -104,16 +105,15 @@ export function createMartianRock(options: RockOptions): THREE.Mesh {
 export interface RockClusterOptions {
   seed: number
   size?: number
-  count?: number
   palette?: readonly string[]
 }
 
 /** One anchor boulder with smaller satellites, merged into a single mesh. */
-export function createRockCluster({ seed, size = 1, count, palette }: RockClusterOptions): THREE.Mesh {
+export function createRockCluster({ seed, size = 1, palette }: RockClusterOptions): THREE.Mesh {
   const rng = createRng(hash(seed, 0x77))
   const parts = [createMartianRockGeometry({ seed: hash(seed, 0), scale: 0.6 * size, variant: 'boulder', palette })]
   parts[0].translate(0, -0.02 * size, 0)
-  const satellites = count ?? rng.int(3, 5)
+  const satellites = rng.int(3, 5)
   const start = rng.range(0, Math.PI * 2)
   for (let k = 1; k <= satellites; k++) {
     const angle = start + (k / satellites) * Math.PI * 2 + rng.range(-0.4, 0.4)
@@ -145,17 +145,17 @@ export interface ScatterOptions {
   seed: number
   points: readonly ScatterPoint[]
   heightAt: (x: number, z: number) => number
-  /** Distinct rock shapes shared across all instances. */
-  variants?: number
-  palette?: readonly string[]
 }
 
+/** Distinct rock shapes shared across all instances. */
+const SCATTER_VARIANTS = 5
+
 /** Many small rocks drawn as a handful of InstancedMeshes (one per shape variant). */
-export function createScatteredRocks({ seed, points, heightAt, variants = 5, palette }: ScatterOptions): THREE.Group {
+export function createScatteredRocks({ seed, points, heightAt }: ScatterOptions): THREE.Group {
   const group = new THREE.Group()
   group.name = 'scattered-rocks'
-  const buckets: ScatterPoint[][] = Array.from({ length: variants }, () => [])
-  points.forEach((point, index) => buckets[Math.floor(hash01(seed, index, 17) * variants)].push(point))
+  const buckets: ScatterPoint[][] = Array.from({ length: SCATTER_VARIANTS }, () => [])
+  points.forEach((point, index) => buckets[Math.floor(hash01(seed, index, 17) * SCATTER_VARIANTS)].push(point))
 
   const tint = new THREE.Color()
   buckets.forEach((bucket, variantIndex) => {
@@ -164,7 +164,6 @@ export function createScatteredRocks({ seed, points, heightAt, variants = 5, pal
       seed: hash(seed, variantIndex, 23),
       // Low-detail shape only: pebbles are too small for the 80-face boulder to read, and there are thousands.
       variant: 'angular',
-      palette,
     })
     const mesh = new THREE.InstancedMesh(geometry, materials.matte(), bucket.length)
     bucket.forEach((point, i) => {

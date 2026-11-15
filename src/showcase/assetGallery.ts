@@ -10,12 +10,12 @@ import {
   SURFACE_TYPES,
   craterProfile,
   createCrackDecals,
-  createTerrain,
+  buildTerrain,
   type SurfaceType,
   type SurfaceWeights,
   type TerrainField,
 } from '../terrain-kit/terrain'
-import type { ShowcaseContent } from './ShowcaseStage'
+import type { ShowcaseContent } from './types'
 
 const COLUMN_SPACING = 4
 const ROW_SPACING = 4.6
@@ -93,7 +93,7 @@ function surfaceSwatch(type: SurfaceType, seed: number): THREE.Object3D {
     },
     surfaceAt: () => weights,
   }
-  const swatch = createTerrain({ grid: SURFACE_SWATCH.grid, field, seed, skirtDepth: SWATCH_DEPTH })
+  const swatch = buildTerrain({ grid: SURFACE_SWATCH.grid, field, seed, skirtDepth: SWATCH_DEPTH }).group
   if (type === 'cracked') {
     swatch.add(createCrackDecals({ seed, heightAt: field.heightAt, center: { x: 0, z: 0 }, ...cracks }))
   }
@@ -113,7 +113,7 @@ function craterSwatch(seed: number): THREE.Object3D {
       return { sand: sandCover * (1 - Math.max(rim, cracked)), rocky: rim * rimRockiness, cracked }
     },
   }
-  const swatch = createTerrain({ grid: CRATER_SWATCH.grid, field, seed, skirtDepth: SWATCH_DEPTH })
+  const swatch = buildTerrain({ grid: CRATER_SWATCH.grid, field, seed, skirtDepth: SWATCH_DEPTH }).group
   swatch.add(
     createCrackDecals({
       seed,

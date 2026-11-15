@@ -1,7 +1,5 @@
 import * as THREE from 'three'
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
-
-export { mergeVertices }
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 export const UP = new THREE.Vector3(0, 1, 0)
 export const DOWN = new THREE.Vector3(0, -1, 0)
@@ -156,8 +154,4 @@ export function placement(x: number, y: number, z: number, rotationY = 0, scale:
 export function octagonPrism(apothem: number, height: number): THREE.BufferGeometry {
   const radius = apothem / Math.cos(Math.PI / 8)
   return new THREE.CylinderGeometry(radius, radius, height, 8).rotateY(Math.PI / 8)
-}
-
-export function shade(color: THREE.Color, factor: number): THREE.Color {
-  return color.clone().multiplyScalar(factor)
 }

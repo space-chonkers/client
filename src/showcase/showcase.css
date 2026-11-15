@@ -117,11 +117,7 @@
   cursor: pointer;
 }
 
-.showcase-toggle:has(input:disabled) {
-  opacity: 0.45;
-  cursor: default;
-}
-
+.showcase-toggle:has(input:disabled),
 .showcase-panel button:disabled {
   opacity: 0.45;
   cursor: default;
@@ -177,5 +173,4 @@
   color: #f6e9dc;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  pointer-events: none;
 }

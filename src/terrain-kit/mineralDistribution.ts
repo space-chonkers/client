@@ -1,4 +1,5 @@
-import type { CraterKind, Geology, MineralFeature, Region } from './reliefMap'
+import type { CraterKind } from './craters'
+import type { Geology, MineralFeature, Region } from './reliefMap'
 
 /**
  * Where, and how often, one mineral family may be placed on a Layer −1 map.
