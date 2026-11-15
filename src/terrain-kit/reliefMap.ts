@@ -1,6 +1,7 @@
 import { DEFAULT_MINERAL_RULES, type MineralRule } from './mineralDistribution'
 import { applyCrater, craterInfluenceRadius, craterPolar, placeCraters, type Crater } from './craters'
-import { clamp, createNoise2D, createRng, fbm, hash, smoothstep, type Rng } from './noise'
+import { cellElevations, type ElevationModel } from './elevation'
+import { clamp, createNoise2D, createRng, fbm, hash, quantile, round2, smoothstep, type Rng } from './noise'
 
 /**
  * Layer −1 data model: the non-walkable geological substrate around and under
@@ -9,11 +10,25 @@ import { clamp, createNoise2D, createRng, fbm, hash, smoothstep, type Rng } from
  */
 export const TERRAIN_LAYER = -1
 
+/**
+ * Whether a map's `geology`, `region` and `feature` were invented by the
+ * seeded classifier. Neither value is an observation.
+ * - procedural: seeded game interpretation of the relief, plus dressing hints
+ *   (rocks, formations, mineral deposits).
+ * - none: every cell is `unclassified` with feature `none`, and nothing is
+ *   dressed. The default for real elevation, so measured terrain never
+ *   carries invented geology or deposits.
+ */
+export type TerrainClassification = 'procedural' | 'none'
+
+/** Geology and region of every cell on a map with classification `none`. */
+export const UNCLASSIFIED = 'unclassified'
+
 /** Planned full map size; any size works (smaller maps are handy for tests). */
 export const MAP_SIZE = 50
 
 /** Geological reading of a cell, derived from its relief and its neighbours. */
-export const GEOLOGY_TYPES = ['crater', 'rim', 'basin', 'plain', 'dunes', 'rubble', 'sediment', 'plateau', 'ridge', 'butte'] as const
+export const GEOLOGY_TYPES = ['crater', 'rim', 'basin', 'plain', 'dunes', 'rubble', 'sediment', 'plateau', 'ridge', 'butte', UNCLASSIFIED] as const
 export type Geology = (typeof GEOLOGY_TYPES)[number]
 
 /**
@@ -21,7 +36,7 @@ export type Geology = (typeof GEOLOGY_TYPES)[number]
  * smoothed relief (highlands above, basins below, crater fields around
  * impacts), so their borders run along landforms rather than across them.
  */
-export const REGION_TYPES = ['plains', 'highlands', 'basin', 'dunefield', 'volcanic', 'craterfield'] as const
+export const REGION_TYPES = ['plains', 'highlands', 'basin', 'dunefield', 'volcanic', 'craterfield', UNCLASSIFIED] as const
 export type Region = (typeof REGION_TYPES)[number]
 
 export const MINERAL_FEATURES = ['hematite', 'gypsum', 'olivine', 'sulfur'] as const
@@ -44,8 +59,10 @@ export interface TerrainCell {
   readonly col: number
   readonly row: number
   readonly layer: typeof TERRAIN_LAYER
-  /** Topographic intensity in [-1, 1]: -1 deepest depression, 0 neutral ground, 1 highest rock mass. */
+  /** Normalized topographic intensity in [-1, 1]: -1 deepest depression, 0 neutral ground, 1 highest rock mass. */
   readonly relief: number
+  /** Real-elevation maps only: mean of the cell's four corner samples, in metres above the datum. */
+  readonly elevationMeters?: number
   /** Largest relief difference to any neighbour; high values mark escarpments and crater walls. */
   readonly slope: number
   /** Relief minus the neighbour average: > 0 knobs and ridges, < 0 pits and bowls. */
@@ -65,6 +82,14 @@ export interface ReliefMap {
   readonly cells: readonly TerrainCell[]
   /** Impact structures carved into the relief (empty for authored relief). */
   readonly craters: readonly Crater[]
+  /** Where `geology`, `region` and `feature` come from; never observed data. */
+  readonly classification: TerrainClassification
+  /**
+   * Real elevation and geographic reference, present only on maps built from
+   * real elevation (`createReliefMapFromMarsTerrain`). The renderer draws these
+   * metres instead of the procedural relief curve (see `reliefField.ts`).
+   */
+  readonly elevation?: ElevationModel
 }
 
 /**
@@ -74,6 +99,13 @@ export interface ReliefMap {
 export interface ReliefMapOptions {
   /** Mineral distribution rules; defaults to {@link DEFAULT_MINERAL_RULES}. */
   mineralRules?: readonly MineralRule[]
+  /**
+   * Real elevation behind `relief` (which must already be its normalized
+   * form), kept alongside the cells as `map.elevation`.
+   */
+  elevation?: ElevationModel
+  /** `none` skips the seeded classifier and dressing (see {@link TerrainClassification}); defaults to `procedural`. */
+  classification?: TerrainClassification
 }
 
 /** Cell lookup with edge clamping, so neighbourhood queries never fall off the map. */
@@ -157,11 +189,10 @@ export function generateLandforms(seed: number, cols: number, rows: number): { r
     edge[index] = macro[index] + edgeWobble.amplitude * fbm(edgeNoise, col * edgeWobble.frequency, row * edgeWobble.frequency, 2)
   }
   const sorted = Array.from(edge).sort((a, b) => a - b)
-  const quantile = (p: number) => sorted[Math.floor(clamp(p, 0, 1) * (count - 1))]
   const highShare = rng.range(LANDFORMS.highlandShare.min, LANDFORMS.highlandShare.max)
-  const tHigh = quantile(1 - highShare)
-  const tTop = quantile(1 - highShare * LANDFORMS.topTierShare)
-  const tBasin = quantile(rng.range(LANDFORMS.basinShare.min, LANDFORMS.basinShare.max))
+  const tHigh = quantile(sorted, 1 - highShare)
+  const tTop = quantile(sorted, 1 - highShare * LANDFORMS.topTierShare)
+  const tBasin = quantile(sorted, rng.range(LANDFORMS.basinShare.min, LANDFORMS.basinShare.max))
 
   const highlandAt = (col: number, row: number) =>
     smoothstep(tHigh - edgeSoftness, tHigh + edgeSoftness, edge[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)])
@@ -221,13 +252,20 @@ export function createReliefMap(
   rows: number,
   relief: readonly number[],
   craters: readonly Crater[] = [],
-  { mineralRules = DEFAULT_MINERAL_RULES }: ReliefMapOptions = {},
+  { mineralRules = DEFAULT_MINERAL_RULES, elevation, classification = 'procedural' }: ReliefMapOptions = {},
 ): ReliefMap {
+  // Callers other than the contract adapter skip its validation; a short array would yield NaN heights.
+  const expectedSamples = (cols + 1) * (rows + 1)
+  if (elevation && elevation.samplesMeters.length !== expectedSamples) {
+    throw new RangeError(`elevation.samplesMeters has ${elevation.samplesMeters.length} values, expected ${expectedSamples} corner samples for a ${cols}×${rows} map`)
+  }
+  const cellMeters = elevation ? cellElevations(elevation.samplesMeters, cols, rows) : null
   const value = (col: number, row: number) => relief[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)]
   const rng = createRng(hash(seed, 0xfea))
 
   const nearest = relief.map((_, index) => nearestCrater(craters, index % cols, Math.floor(index / cols)))
-  const regions = classifyRegions(seed, cols, rows, relief, nearest)
+  const classified = classification === 'procedural'
+  const regions: readonly Region[] = classified ? classifyRegions(seed, cols, rows, relief, nearest) : relief.map(() => UNCLASSIFIED)
   const measured = relief.map((r, index) => {
     const col = index % cols
     const row = Math.floor(index / cols)
@@ -244,40 +282,52 @@ export function createReliefMap(
     }
     const curvature = r - sum / 8
     const region = regions[index]
-    const geology = classify(r, slope, curvature, region, nearest[index], regions, cols, rows, col, row)
+    const geology = classified ? classify(r, slope, curvature, region, nearest[index], regions, cols, rows, col, row) : UNCLASSIFIED
     return { col, row, relief: r, slope: round2(slope), curvature: round2(curvature), geology, region }
   })
 
-  // Low ground within a few cells of an escarpment: where detached outliers (mesas, buttes) stand.
-  const nearScarp = regions.map((region, index) => {
-    if (region === 'highlands' || region === 'craterfield') return false
-    const col = index % cols
-    const row = Math.floor(index / cols)
-    const reach = GEOLOGY_THRESHOLDS.scarpNeighbourhood
-    for (let dr = -reach; dr <= reach; dr++) {
-      for (let dc = -reach; dc <= reach; dc++) {
-        if (regions[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)] === 'highlands') return true
+  // Without classification every cell stays bare; otherwise seeded dressing hints follow the geology.
+  let features: TerrainFeature[] = relief.map(() => 'none')
+  if (classified) {
+    // Low ground within a few cells of an escarpment: where detached outliers (mesas, buttes) stand.
+    const nearScarp = regions.map((region, index) => {
+      if (region === 'highlands' || region === 'craterfield') return false
+      const col = index % cols
+      const row = Math.floor(index / cols)
+      const reach = GEOLOGY_THRESHOLDS.scarpNeighbourhood
+      for (let dr = -reach; dr <= reach; dr++) {
+        for (let dc = -reach; dc <= reach; dc++) {
+          if (regions[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)] === 'highlands') return true
+        }
       }
-    }
-    return false
-  })
-  const cluster = createNoise2D(hash(seed, 0xc1))
-  const features: TerrainFeature[] = measured.map((cell, index) =>
-    baseFeature(cell, nearest[index], nearScarp[index], value, fbm(cluster, cell.col * FEATURE_ODDS.clump.frequency, cell.row * FEATURE_ODDS.clump.frequency, 2), rng.next(), rng.next()),
-  )
-  placeMinerals(measured, nearest, features, cols, rng, mineralRules)
+      return false
+    })
+    const cluster = createNoise2D(hash(seed, 0xc1))
+    features = measured.map((cell, index) =>
+      baseFeature(cell, nearest[index], nearScarp[index], value, fbm(cluster, cell.col * FEATURE_ODDS.clump.frequency, cell.row * FEATURE_ODDS.clump.frequency, 2), rng.next(), rng.next()),
+    )
+    placeMinerals(measured, nearest, features, cols, rng, mineralRules)
 
-  // Large formations need a free ring of cells, otherwise they read as a pile.
-  for (let index = 0; index < features.length; index++) {
-    if (LARGE_FEATURES.has(features[index]) && nearLarge(features, cols, index, index)) features[index] = 'boulder'
+    // Large formations need a free ring of cells, otherwise they read as a pile.
+    for (let index = 0; index < features.length; index++) {
+      if (LARGE_FEATURES.has(features[index]) && nearLarge(features, cols, index, index)) features[index] = 'boulder'
+    }
   }
 
   return {
     seed,
     cols,
     rows,
-    cells: measured.map((cell, index) => ({ ...cell, layer: TERRAIN_LAYER, feature: features[index], walkable: false })),
+    cells: measured.map((cell, index) => ({
+      ...cell,
+      layer: TERRAIN_LAYER,
+      feature: features[index],
+      walkable: false,
+      ...(cellMeters ? { elevationMeters: cellMeters[index] } : {}),
+    })),
     craters,
+    classification,
+    elevation,
   }
 }
 
@@ -510,6 +560,7 @@ function baseFeature(
       return roll < boulder.base + boulder.perClump * clumped ? 'boulder' : 'none'
     }
     case 'dunes':
+    case UNCLASSIFIED:
       return 'none'
     case 'rubble': {
       const { rockCluster, boulder, pebbles } = odds.rubble
@@ -586,5 +637,3 @@ function shuffle<T>(items: T[], rng: Rng): T[] {
   }
   return items
 }
-
-const round2 = (value: number) => Math.round(value * 100) / 100

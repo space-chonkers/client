@@ -1,5 +1,7 @@
 import { craterPolar, type CraterKind } from './craters'
-import { clamp, createNoise2D, createRng, fbm, hash, smoothstep } from './noise'
+import { cornerIndex, type ElevationModel } from './elevation'
+import { worldUnitsPerMeter } from './marsCoordinates'
+import { clamp, createNoise2D, createRng, fbm, hash, lerp, smoothstep } from './noise'
 import { cellAt, prevailingWind, type Geology, type Region, type ReliefMap, type TerrainCell } from './reliefMap'
 import type { GridSpec, SurfaceWeights, TerrainField } from './terrain'
 
@@ -59,6 +61,8 @@ const GEOLOGY_SURFACE: Record<Geology, SurfaceWeights> = {
   plateau: { sedimentary: 0.45, sand: 0.55 },
   ridge: { rocky: 0.85, sedimentary: 0.35 },
   butte: { sedimentary: 0.8, rocky: 0.4 },
+  /** Real elevation without classification: one neutral ground, so colour carries no geological claim. */
+  unclassified: { soil: 1 },
 }
 
 /** Province tint layered over the local mix, so regions read at the macro scale. */
@@ -69,6 +73,7 @@ const REGION_SURFACE: Record<Region, SurfaceWeights> = {
   dunefield: { duneSand: 0.45 },
   volcanic: { basalt: 1.3 },
   craterfield: {},
+  unclassified: {},
 }
 
 type SurfaceEntries = readonly (readonly [keyof SurfaceWeights, number])[]
@@ -190,6 +195,27 @@ const LANDFORM_SHADING = {
 }
 
 /**
+ * Visual height of a real-elevation map: corner samples relative to the
+ * normalization reference, at true scale in world units, bilinear across each
+ * cell (no overshoot beyond the measured values).
+ */
+function elevationHeightField(elevation: ElevationModel, grid: GridSpec) {
+  const { cols, rows, cellSize } = grid
+  const scale = worldUnitsPerMeter(cellSize, elevation.cellSizeMeters)
+  const { referenceMeters } = elevation.normalization
+  const heights = elevation.samplesMeters.map((meters) => (meters - referenceMeters) * scale)
+  const corner = (col: number, row: number) => heights[cornerIndex(cols, col, row)]
+  return (x: number, z: number) => {
+    // Corner (col, row) sits at world ((col − cols/2) × cellSize, (row − rows/2) × cellSize).
+    const u = clamp(x / cellSize + cols / 2, 0, cols)
+    const v = clamp(z / cellSize + rows / 2, 0, rows)
+    const i = Math.min(Math.floor(u), cols - 1)
+    const j = Math.min(Math.floor(v), rows - 1)
+    return lerp(lerp(corner(i, j), corner(i + 1, j), u - i), lerp(corner(i, j + 1), corner(i + 1, j + 1), u - i), v - j)
+  }
+}
+
+/**
  * Continuous field built only from cell data. Relief is bicubically
  * interpolated across neighbouring cells, sample points are gently
  * domain-warped so contours never follow the grid, and each geology adds its
@@ -197,6 +223,8 @@ const LANDFORM_SHADING = {
  * ejecta rays of fresh impacts.
  */
 export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField {
+  // Real elevation is drawn as measured; surface mix and shading still read cell data.
+  const measuredHeight = map.elevation ? elevationHeightField(map.elevation, grid) : null
   const warp = createNoise2D(hash(map.seed, 0xa1))
   const detail = createNoise2D(hash(map.seed, 0xa2))
   const rough = createNoise2D(hash(map.seed, 0xa3))
@@ -320,6 +348,7 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
 
   return {
     heightAt(x, z) {
+      if (measuredHeight) return measuredHeight(x, z)
       sampleCells(x, z)
       const terrace = clamp((region.get('highlands') ?? 0) + (geology.get('butte') ?? 0), 0, 1)
       // Noise terms are only evaluated where their landform exists: they dominate meshing cost.
