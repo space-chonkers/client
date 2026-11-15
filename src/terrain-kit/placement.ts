@@ -60,6 +60,10 @@ export function placeOnSurface(
   { mode = 'rest', rotationY = 0, maxTilt = 0, maxRoughness = Infinity, maxDrop = Infinity, maxBuried = 1 }: PlacementOptions = {},
 ): boolean {
   const radius = footprintRadius(object)
+  // A candidate can be rejected after the object was moved onto it (buried check), so the
+  // original transform is restored when no candidate passes.
+  const originalPosition = object.position.clone()
+  const originalQuaternion = object.quaternion.clone()
   const spin = new THREE.Quaternion().setFromAxisAngle(UP, rotationY)
   const tilt = new THREE.Quaternion()
   const normal = new THREE.Vector3()
@@ -119,6 +123,9 @@ export function placeOnSurface(
     if (maxBuried < 1 && buriedFraction(object, surface) > maxBuried) continue
     return true
   }
+  object.position.copy(originalPosition)
+  object.quaternion.copy(originalQuaternion)
+  object.updateMatrixWorld(true)
   return false
 }
 

@@ -81,7 +81,11 @@ everything that builds meshes depends on them, never the reverse.
 
 ### Business Rules
 - Same seed and options → identical map and meshes.
-- Relief values are clamped to [-1, 1] and rounded to two decimals.
+- Generated relief (`generateLandforms`) is clamped to [-1, 1] and rounded to two
+  decimals. `createReliefMap` stores the relief it is given as-is, so callers passing
+  authored relief must keep it in [-1, 1].
+- Dressing is sized for `cellSize = 1`: asset sizes and footprints are fixed world
+  units, while the mesh and placement spots scale with `cellSize`.
 - Every map has one large "hero" crater and at least one fresh crater when possible.
 - Generation is tuned through documented parameter tables, one per concern:
 

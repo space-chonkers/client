@@ -1,5 +1,5 @@
 import { DEFAULT_MINERAL_RULES, type MineralRule } from './mineralDistribution'
-import { applyCrater, craterPolar, placeCraters, type Crater } from './craters'
+import { applyCrater, craterInfluenceRadius, craterPolar, placeCraters, type Crater } from './craters'
 import { clamp, createNoise2D, createRng, fbm, hash, smoothstep, type Rng } from './noise'
 
 /**
@@ -121,8 +121,6 @@ const LANDFORMS = {
   highland: { lift: 0.4, roughness: 0.04, roughnessFrequency: 0.2, topLift: 0.36 },
   /** Near-flat sediment floor of basins. */
   basinFloor: { level: -0.3, roughness: 0.025, frequency: 0.15 },
-  /** Cells a crater can affect around its centre, in crater radii. */
-  craterReach: 2.7,
 }
 
 /**
@@ -197,11 +195,11 @@ export function generateLandforms(seed: number, cols: number, rows: number): { r
 
   const craters = placeCraters(rng, craterField, cols, rows, highlandAt)
   for (const crater of craters) {
-    const base = relief[clamp(Math.round(crater.row), 0, rows - 1) * cols + clamp(Math.round(crater.col), 0, cols - 1)]
-    const reach = Math.ceil(crater.radius * LANDFORMS.craterReach)
+    const floorRelief = relief[clamp(Math.round(crater.row), 0, rows - 1) * cols + clamp(Math.round(crater.col), 0, cols - 1)]
+    const reach = Math.ceil(craterInfluenceRadius(crater))
     for (let row = Math.max(0, Math.floor(crater.row - reach)); row <= Math.min(rows - 1, Math.ceil(crater.row + reach)); row++) {
       for (let col = Math.max(0, Math.floor(crater.col - reach)); col <= Math.min(cols - 1, Math.ceil(crater.col + reach)); col++) {
-        relief[row * cols + col] = applyCrater(crater, base, relief[row * cols + col], col, row)
+        relief[row * cols + col] = applyCrater(crater, floorRelief, relief[row * cols + col], col, row)
       }
     }
   }

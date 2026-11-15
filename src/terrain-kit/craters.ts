@@ -202,7 +202,6 @@ function rimHeight(form: CraterForm, angle: number): number {
   return h
 }
 
-/** Applies one crater to the relief value `v` of the cell at (col, row). */
 /** How a carved crater blends into the surrounding relief; distances in rim radii. */
 const CRATER_SHAPE = {
   /** Beyond this distance a crater leaves the relief untouched. */
@@ -216,6 +215,16 @@ const CRATER_SHAPE = {
   levelTo: 0.72,
 }
 
+/**
+ * Largest distance from the centre, in cells, at which {@link applyCrater}
+ * can change the relief. The outline factor in {@link craterPolar} peaks at
+ * `1 + outline`, so this bound always covers the irregular outline.
+ */
+export function craterInfluenceRadius(crater: Crater): number {
+  return CRATER_SHAPE.reach * crater.radius * (1 + craterForm(crater).outline)
+}
+
+/** Applies one crater to the relief value `v` of the cell at (col, row). */
 export function applyCrater(crater: Crater, base: number, v: number, col: number, row: number): number {
   const form = craterForm(crater)
   const { d, angle } = craterPolar(crater, col, row)
@@ -309,7 +318,8 @@ export function placeCraters(
     else kind = roll < odds.large.fresh ? 'fresh' : roll < odds.large.eroded ? 'eroded' : 'shallow'
     craters.push({ col, row, radius, kind, seed: hash(rng.int(0, 0x7fffffff), 0xc7a)})
   }
-  // Every map shows at least one fresh impact; promote the largest plain-ground small crater if needed.
+  // Every map shows at least one fresh impact; if none rolled fresh, promote the
+  // first non-hero crater (in placement order) that is not overlapping another.
   if (!craters.some((c) => c.kind === 'fresh')) {
     const index = craters.findIndex((c, i) => i > 0 && c.kind !== 'overlapping')
     if (index > 0) craters[index] = { ...craters[index], kind: 'fresh' }

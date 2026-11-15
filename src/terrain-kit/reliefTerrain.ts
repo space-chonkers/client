@@ -52,6 +52,11 @@ export interface ReliefTerrain {
 
 export interface ReliefTerrainOptions {
   map: ReliefMap
+  /**
+   * World units per cell. The terrain mesh, placement spots and scatter scale
+   * with it, but asset sizes, footprints and talus radii are fixed world units
+   * tuned for the default of 1; other values give over- or under-sized dressing.
+   */
   cellSize?: number
   /** Facets per cell edge; escarpments need ~4 to stay crisp. */
   subdivisions?: number
@@ -411,11 +416,11 @@ function scatterPoints(
     if (cell.feature === 'pebbles') density += ROCK_SCATTER.pebbleCellBonus
     density *= clump.base + clump.gain * smoothstep(clump.from, clump.to, fbm(cluster, cell.col * clump.frequency, cell.row * clump.frequency, 2))
     const attempts = Math.round(clamp(density, 0, ROCK_SCATTER.maxDensity) * ROCK_SCATTER.attemptsPerDensity)
+    // Clumped inside the cell too: points pull toward a per-cell focus.
+    const fx = hash01(map.seed, cell.col, cell.row, 0x51) - 0.5
+    const fz = hash01(map.seed, cell.col, cell.row, 0x52) - 0.5
+    const { focusShare, jitter, big: bigRock, small } = ROCK_SCATTER
     for (let k = 0; k < attempts; k++) {
-      // Clumped inside the cell too: points pull toward a per-cell focus.
-      const fx = hash01(map.seed, cell.col, cell.row, 0x51) - 0.5
-      const fz = hash01(map.seed, cell.col, cell.row, 0x52) - 0.5
-      const { focusShare, jitter, big: bigRock, small } = ROCK_SCATTER
       const x = center.x + (fx * focusShare + rng.range(-jitter, jitter)) * grid.cellSize
       const z = center.z + (fz * focusShare + rng.range(-jitter, jitter)) * grid.cellSize
       if (blocked(x, z)) continue
