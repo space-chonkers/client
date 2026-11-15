@@ -31,3 +31,354 @@ body,
 .cube-scene canvas {
   display: block;
 }
+
+/* ---------- Homepage: JAM (Junior Astronaut Mission) ---------- */
+/*
+ * Tritanopia-friendly palette: reds/corals, creams and teal. States never rely
+ * on color alone (there is always text, an icon or a shape that tells them apart).
+ */
+.home-screen,
+.mission-screen {
+  --mars-sky: #f3cdb8;
+  --mars-rust: #a94a2e;
+  --mars-rust-dark: #6e2c19;
+  --ink: #2b1d1a;
+  --cream: #fff6ef;
+  --panel: rgba(255, 246, 239, 0.92);
+  --coral: #e5533c;
+  --coral-dark: #a8331f;
+  --teal: #108a8c;
+  --teal-dark: #0a5f61;
+  --button-depth: 6px;
+
+  font-family: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--mars-sky);
+}
+
+.home-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mars-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.mars-scene canvas {
+  display: block;
+}
+
+.home-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'title'
+    '.'
+    'menu';
+  padding: 24px 16px;
+  pointer-events: none;
+}
+
+.home-overlay > * {
+  pointer-events: auto;
+}
+
+/* Logo */
+.home-title {
+  grid-area: title;
+  justify-self: center;
+  text-align: center;
+}
+
+/* SVG filter source for the sticker outline; takes no space in the layout */
+.home-title__filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Sticker-collage logo: each letter has its own face, color and tilt and they
+ * overlap. The whole word gets a cream die-cut border (SVG filter defined in
+ * HomeScreen) and a hard ink shadow toward the lower left (sun from the right).
+ * Sizes are in em so the logo keeps its proportions at every width.
+ */
+.home-title__logo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* Room for the lowered, tilted letters and the shadow so they never cover the subtitle */
+  margin: 0 0 0.16em;
+  font-size: clamp(5.5rem, 20vw, 12rem);
+  line-height: 0.8;
+  transform: rotate(-3deg);
+  filter:
+    url(#jam-logo-sticker-outline)
+    drop-shadow(-0.06em 0.06em 0 var(--ink))
+    drop-shadow(-0.05em 0.08em 0.09em rgba(43, 29, 26, 0.35));
+}
+
+.home-title__letter {
+  display: inline-block;
+}
+
+.home-title__letter--j {
+  font-family: 'Archivo Black', 'Nunito', sans-serif;
+  font-weight: 400;
+  color: var(--coral);
+  transform: translateY(0.05em) rotate(-8deg);
+}
+
+.home-title__letter--a {
+  margin-left: -0.16em;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-weight: 700;
+  font-size: 1.1em;
+  color: var(--ink);
+  transform: translateY(0.1em) rotate(5deg);
+}
+
+.home-title__letter--m {
+  margin-left: -0.14em;
+  font-family: 'Archivo Black', 'Nunito', sans-serif;
+  font-weight: 400;
+  color: var(--teal);
+  transform: translateY(-0.08em) rotate(-5deg);
+}
+
+.home-title__subtitle {
+  display: inline-block;
+  margin: 18px 0 0;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--mars-rust-dark);
+  color: var(--cream);
+  font-size: clamp(0.85rem, 2.6vw, 1.1rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Chunky, toy-like buttons with depth */
+.chunky-button {
+  position: relative;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  padding: 10px 18px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 var(--button-depth) 0 var(--ink);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.chunky-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--ink);
+}
+
+.chunky-button:active:not(:disabled) {
+  transform: translateY(var(--button-depth));
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.chunky-button:focus-visible {
+  outline: 4px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.chunky-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Mode menu */
+.mode-menu {
+  grid-area: menu;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 520px);
+}
+
+.mode-menu__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+.mode-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  border-radius: 22px;
+  color: var(--cream);
+  --button-depth: 8px;
+}
+
+.mode-button--solo {
+  background: var(--coral);
+  box-shadow: 0 var(--button-depth) 0 var(--coral-dark), 0 var(--button-depth) 0 3px var(--ink);
+}
+
+.mode-button--coop {
+  background: var(--teal);
+  box-shadow: 0 var(--button-depth) 0 var(--teal-dark), 0 var(--button-depth) 0 3px var(--ink);
+}
+
+.mode-button--solo:hover:not(:disabled) {
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--coral-dark), 0 calc(var(--button-depth) + 2px) 0 3px var(--ink);
+}
+
+.mode-button--coop:hover:not(:disabled) {
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--teal-dark), 0 calc(var(--button-depth) + 2px) 0 3px var(--ink);
+}
+
+.mode-button__label {
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(43, 29, 26, 0.45);
+}
+
+/* Music control: a button that expands a compact panel below it */
+.music-control {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.music-control__toggle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+.music-control__toggle[aria-expanded='true'] {
+  background: var(--coral);
+  color: var(--cream);
+}
+
+/* Muted: the collapsed button shows a diagonal slash, not just a color change */
+.music-control__toggle.is-muted::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 34px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.music-control__panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 5px 0 var(--ink);
+  animation: music-panel-in 140ms ease-out;
+}
+
+@keyframes music-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+.chunky-button--icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 1.4rem;
+  line-height: 1;
+  --button-depth: 4px;
+}
+
+.music-control__meter {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 36px;
+}
+
+.music-control__bar {
+  width: 7px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.music-control__bar.is-active {
+  background: var(--coral);
+}
+
+.music-control__bar:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.music-control__value {
+  min-width: 3em;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+/* Screen after choosing a mode: the player sandbox with a button back home */
+.mission-screen {
+  position: relative;
+}
+
+.mission-screen__back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+}
+
+@media (max-width: 640px) {
+  .home-overlay {
+    padding-top: 72px;
+  }
+
+  .music-control__panel .chunky-button--icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chunky-button {
+    transition: none;
+  }
+
+  .music-control__panel {
+    animation: none;
+  }
+}
