@@ -1,15 +1,15 @@
+import { createSoundOutput, getAudioContext, playTone, type SoundOutput } from './soundManager'
+
 /**
- * Ambient background music generated with the Web Audio API.
- *
- * It is generated procedurally (pad + soft arpeggio) so no audio file is needed.
- * The AudioContext is created lazily in `start()` because browsers block audio
- * until there is a user gesture.
+ * Ambient background music generated procedurally (pad + soft arpeggio), so no
+ * audio file is needed.
  */
 
-/** Actual maximum master gain; UI volume 1.0 maps to this value. */
-const MAX_MASTER_GAIN = 0.35
+/** Actual maximum gain; UI volume 1.0 maps to this value. */
+const MAX_MUSIC_GAIN = 0.35
 const VOLUME_SMOOTHING_SECONDS = 0.05
 
+const FIRST_STEP_DELAY_SECONDS = 0.1
 const STEP_DURATION_SECONDS = 0.5
 const STEPS_PER_CHORD = 8
 const SCHEDULER_INTERVAL_MS = 100
@@ -45,8 +45,7 @@ function midiToFrequency(midiNote: number): number {
  */
 export class BackgroundMusic {
   private context: AudioContext | null = null
-  private masterGain: GainNode | null = null
-  private outputNode: AudioNode | null = null
+  private output: SoundOutput | null = null
   private schedulerId: number | null = null
   private nextStepTime = 0
   private stepIndex = 0
@@ -54,57 +53,32 @@ export class BackgroundMusic {
 
   /** Starts (or resumes) the music. Must be called after a user gesture. */
   start(): void {
-    if (this.context) {
-      void this.context.resume()
-      return
-    }
+    const context = getAudioContext()
+    if (!context || this.output) return
 
-    try {
-      this.context = new AudioContext()
-    } catch (error) {
-      console.error('Could not initialize background audio:', error)
-      return
-    }
-
-    const context = this.context
-    this.masterGain = context.createGain()
-    this.masterGain.gain.value = this.volume * MAX_MASTER_GAIN
-    this.masterGain.connect(context.destination)
-
-    const lowpass = context.createBiquadFilter()
-    lowpass.type = 'lowpass'
-    lowpass.frequency.value = LOWPASS_CUTOFF_HZ
-    lowpass.connect(this.masterGain)
-    this.outputNode = lowpass
-
-    this.nextStepTime = context.currentTime + 0.1
+    this.context = context
+    this.output = createSoundOutput(context, LOWPASS_CUTOFF_HZ, this.volume * MAX_MUSIC_GAIN)
+    this.nextStepTime = context.currentTime + FIRST_STEP_DELAY_SECONDS
     this.schedulerId = window.setInterval(() => this.scheduleAhead(), SCHEDULER_INTERVAL_MS)
   }
 
   /** Normalized volume between 0 and 1. */
   setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume))
-    if (!this.context || !this.masterGain) return
+    if (!this.context || !this.output) return
 
-    this.masterGain.gain.setTargetAtTime(
-      this.volume * MAX_MASTER_GAIN,
-      this.context.currentTime,
-      VOLUME_SMOOTHING_SECONDS,
-    )
+    this.output.gain.gain.setTargetAtTime(this.volume * MAX_MUSIC_GAIN, this.context.currentTime, VOLUME_SMOOTHING_SECONDS)
   }
 
-  /** Stops scheduling and closes the AudioContext. `start()` can create a new one afterwards. */
+  /** Stops scheduling and silences the music. `start()` can restart it afterwards. */
   dispose(): void {
     if (this.schedulerId !== null) {
       window.clearInterval(this.schedulerId)
       this.schedulerId = null
     }
-    if (this.context) {
-      void this.context.close()
-    }
+    this.output?.gain.disconnect()
+    this.output = null
     this.context = null
-    this.masterGain = null
-    this.outputNode = null
   }
 
   private scheduleAhead(): void {
@@ -136,47 +110,36 @@ export class BackgroundMusic {
   }
 
   private scheduleStep(stepIndex: number, startTime: number): void {
+    if (!this.output) return
+
+    const { input } = this.output
     const chordIndex = Math.floor(stepIndex / STEPS_PER_CHORD) % CHORD_PROGRESSION.length
     const chord = CHORD_PROGRESSION[chordIndex]
-    const stepInChord = stepIndex % STEPS_PER_CHORD
 
-    if (stepInChord === 0) {
+    if (stepIndex % STEPS_PER_CHORD === 0) {
       const chordDuration = STEPS_PER_CHORD * STEP_DURATION_SECONDS
       chord.forEach((note) => {
-        this.playTone(midiToFrequency(note), 'triangle', startTime, chordDuration, PAD_PEAK_GAIN, PAD_ATTACK_SECONDS)
+        playTone(input, {
+          frequency: midiToFrequency(note),
+          waveform: 'triangle',
+          startTime,
+          duration: chordDuration,
+          peakGain: PAD_PEAK_GAIN,
+          attackSeconds: PAD_ATTACK_SECONDS,
+        })
       })
     }
 
     const arpeggioNoteIndex = ARPEGGIO_PATTERN[stepIndex % ARPEGGIO_PATTERN.length]
     if (arpeggioNoteIndex >= 0) {
-      const note = chord[arpeggioNoteIndex] + ARPEGGIO_OCTAVE_SHIFT
-      this.playTone(midiToFrequency(note), 'sine', startTime, PLUCK_DURATION_SECONDS, PLUCK_PEAK_GAIN, PLUCK_ATTACK_SECONDS)
+      playTone(input, {
+        frequency: midiToFrequency(chord[arpeggioNoteIndex] + ARPEGGIO_OCTAVE_SHIFT),
+        waveform: 'sine',
+        startTime,
+        duration: PLUCK_DURATION_SECONDS,
+        peakGain: PLUCK_PEAK_GAIN,
+        attackSeconds: PLUCK_ATTACK_SECONDS,
+      })
     }
-  }
-
-  private playTone(
-    frequency: number,
-    waveform: OscillatorType,
-    startTime: number,
-    duration: number,
-    peakGain: number,
-    attackSeconds: number,
-  ): void {
-    if (!this.context || !this.outputNode) return
-
-    const oscillator = this.context.createOscillator()
-    oscillator.type = waveform
-    oscillator.frequency.value = frequency
-
-    const envelope = this.context.createGain()
-    envelope.gain.setValueAtTime(0, startTime)
-    envelope.gain.linearRampToValueAtTime(peakGain, startTime + attackSeconds)
-    envelope.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
-
-    oscillator.connect(envelope)
-    envelope.connect(this.outputNode)
-    oscillator.start(startTime)
-    oscillator.stop(startTime + duration + 0.05)
-    oscillator.onended = () => envelope.disconnect()
   }
 }

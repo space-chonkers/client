@@ -8,7 +8,7 @@
 
 ### Scope
 
-Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: choosing **Solo** makes `App` mount `PlayerSandboxView` (the player test scene) with a "Back to home" button; choosing **Co-op** opens the crew waiting room (see [coop_lobby.md](./coop_lobby.md)). The chosen mode is not used by the sandbox yet.
+Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene) with a "Back to home" button. The chosen mode is not used by the sandbox yet, except that **Solo** fires a test hazard warning (see `docs/hazard_alert.md`).
 
 ## 1. Architecture
 
@@ -16,12 +16,13 @@ Includes the scene, the controllable character, the mode menu, the music control
 public/
 └── favicon.svg                 # Tab icon: the junior astronaut
 src/
-├── App.tsx                     # Screen state (home / co-op lobby / mission) + app-wide music
+├── App.tsx                     # Selected mode state, app-wide music and hazard alert
 ├── style.css                   # Global base styles + mission screen
 ├── ui/
 │   ├── theme.css               # JAM palette tokens and font (.home-screen, .lobby-screen, .mission-screen)
 │   └── chunkyButton.css        # Shared .chunky-button / .chunky-button--icon
 ├── audio/
+│   ├── soundManager.ts         # Shared AudioContext, output chain and playTone helper
 │   ├── BackgroundMusic.ts      # Procedural music engine (Web Audio API)
 │   └── useBackgroundMusic.ts   # Hook: volume, mute and audio unlock
 └── home/
@@ -54,7 +55,8 @@ src/
 | `isMarsTileWalkable`          | Tile is on the flat plain and outside the base.                                                                                                                                                                                                                                                    |
 | `MusicVolumeControl`          | Round music-note button; clicking it expands the panel (mute / − / 10-level bar / + / percentage). `Escape` closes it.                                                                                                                                                                             |
 | `useBackgroundMusic`          | Returns `{ volume, isMuted, setVolume, toggleMute }`. Starts audio on the first `pointerdown`/`keydown`.                                                                                                                                                                                           |
-| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio with oscillators; `start`, `setVolume`, `dispose`. Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                                                                                      |
+| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio via `playTone`; `start`, `setVolume`, `dispose` (stops the scheduler and disconnects its output; the shared context stays open). Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                        |
+| `soundManager`                | Shared by all sounds: `getAudioContext()` (one lazy, auto-resumed `AudioContext` for the whole app), `createSoundOutput()` (`lowpass → gain → speakers`, one per sound for its own volume/off switch) and `playTone()` (oscillator with attack/decay envelope). New sounds should build on these helpers.                                                                                   |
 
 ## 3. Business Logic
 
@@ -76,6 +78,7 @@ src/
 ### Modes
 
 - Solo: 1 player. Co-op: up to 4 players (stated in each button's accessible label).
+- Picking **Solo** also sends a random hazard code (1–4) to `useHazardAlert` as a temporary test trigger. "Back to home" calls `dismiss()`, which clears the banner and the "in progress" label and stops the alarm.
 - Nothing is persisted (no saves, volume or mode).
 
 ## 4. Dependencies
