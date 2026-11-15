@@ -1,8 +1,9 @@
 import * as THREE from 'three'
+import { CorridorGrid } from './corridor/CorridorGrid'
 import {
-  CorridorGrid,
-  type ConstructionPayload,
-} from './corridor/CorridorGrid'
+  INITIAL_BASE_ORIGIN,
+  INITIAL_SERVER_CONSTRUCTIONS,
+} from './corridor/mockServerPayload'
 import { InputController } from './input/InputController'
 import { FACING_VECTORS } from './player/Facing'
 import { Player } from './player/Player'
@@ -11,20 +12,6 @@ import { Player } from './player/Player'
 const GRID_SIZE = 20
 /** Corridor floor deck height so the astronaut stands on top of Layer 0 tiles. */
 const CORRIDOR_DECK_HEIGHT = 0.08
-/** Center cell (stash) of the initial 3x3 server base payload. */
-const INITIAL_BASE_ORIGIN = { cellX: 29, cellY: 25 } as const
-/** Initial 3x3 base constructions matching the authoritative server payload. */
-const INITIAL_SERVER_CONSTRUCTIONS: ReadonlyArray<ConstructionPayload> = [
-  { id: 'base-28-24', kind: 'base_tile', cellX: 28, cellY: 24 },
-  { id: 'base-29-24', kind: 'base_tile', cellX: 29, cellY: 24 },
-  { id: 'base-30-24', kind: 'base_tile', cellX: 30, cellY: 24 },
-  { id: 'base-28-25', kind: 'base_tile', cellX: 28, cellY: 25 },
-  { id: 'stash', kind: 'stash', cellX: 29, cellY: 25 },
-  { id: 'base-30-25', kind: 'base_tile', cellX: 30, cellY: 25 },
-  { id: 'base-28-26', kind: 'base_tile', cellX: 28, cellY: 26 },
-  { id: 'base-29-26', kind: 'base_tile', cellX: 29, cellY: 26 },
-  { id: 'base-30-26', kind: 'base_tile', cellX: 30, cellY: 26 },
-]
 /** Angled top-down camera, relative to the player. */
 const CAMERA_OFFSET = new THREE.Vector3(0, 9, 7.5)
 const CAMERA_LOOK_HEIGHT = 0.8

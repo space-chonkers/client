@@ -25,13 +25,15 @@ src/
 └── game/
     ├── PlayerSandbox.ts
     └── corridor/
-        └── CorridorGrid.ts
+        ├── CorridorGrid.ts
+        └── mockServerPayload.ts
 ```
 
 ### Architectural Responsibilities
 - `SpaceCorridor.tsx` isolates procedural Three.js geometry construction and coordinate math from React state and networking layers.
 - `CorridorGrid.ts` maintains the set of occupied `(gridX, gridZ)` tiles in Layer `0`, resolves neighbor connectivity (`north`, `south`, `east`, `west`), and rebuilds affected tile meshes when tiles are added or removed.
-- `PlayerSandbox.ts` mounts `CorridorGrid` with an initial connected base around `(0, 0)` and allows live testing via `E` or `Space`.
+- `mockServerPayload.ts` defines the temporary server payload contract (`ServerMatchPayload`, `INITIAL_SERVER_PAYLOAD`, `INITIAL_BASE_ORIGIN`, `INITIAL_SERVER_CONSTRUCTIONS`) to serve as the baseline until the live backend service is connected.
+- `PlayerSandbox.ts` mounts `CorridorGrid` with the initial `3x3` base from `mockServerPayload.ts` and allows live corridor expansion via `E` or `Space`.
 
 ## 3. Implementation Details
 
