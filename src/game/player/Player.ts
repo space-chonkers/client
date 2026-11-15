@@ -31,9 +31,13 @@ export type MovementBounds = {
   maxZ: number
 }
 
+export const DEFAULT_PLAYER_SCALE = 0.55
+
 export type PlayerOptions = {
   /** Main suit color. Defaults to ASTRONAUT_COLORS.suit (white). */
   suitColor?: THREE.ColorRepresentation
+  /** Uniform model scale. Defaults to DEFAULT_PLAYER_SCALE (0.55). */
+  scale?: number
   tuning?: Readonly<PlayerTuning>
   bounds?: MovementBounds | null
 }
@@ -63,6 +67,7 @@ export class Player {
     this.model = new AstronautModel({ suitColor: options.suitColor })
 
     this.object.name = 'Player'
+    this.object.scale.setScalar(options.scale ?? DEFAULT_PLAYER_SCALE)
     this.object.add(this.model.root)
     this.object.rotation.y = this.yaw
   }

@@ -96,16 +96,16 @@ export function createCorridorSegment(
     flatShading: true,
   })
 
-  // 1. Metallic corridor floor deck (Layer 0 base structure)
-  const floorDeck = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.08, 0.88), floorMat)
+  // 1. Metallic corridor floor deck occupying 100% of the 1x1 tile (Layer 0 base structure)
+  const floorDeck = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 1.0), floorMat)
   floorDeck.position.set(0, 0.04, 0)
   segment.add(floorDeck)
 
-  // 2. Low corner structural pillars
-  for (const sx of [-0.39, 0.39]) {
-    for (const sz of [-0.39, 0.39]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 0.1), trimMat)
-      post.position.set(sx, 0.23, sz)
+  // 2. Low corner structural pillars flush with the 1x1 tile corners
+  for (const sx of [-0.45, 0.45]) {
+    for (const sz of [-0.45, 0.45]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.1), trimMat)
+      post.position.set(sx, 0.35, sz)
       segment.add(post)
     }
   }
@@ -131,28 +131,28 @@ export function createCorridorSegment(
   const addWall = (side: CardinalSide) => {
     const isZWall = side === 'north' || side === 'south'
     const wallGeo = isZWall
-      ? new THREE.BoxGeometry(0.88, 0.34, 0.08)
-      : new THREE.BoxGeometry(0.08, 0.34, 0.88)
+      ? new THREE.BoxGeometry(1.0, 0.58, 0.08)
+      : new THREE.BoxGeometry(0.08, 0.58, 1.0)
     const capGeo = isZWall
-      ? new THREE.BoxGeometry(0.88, 0.04, 0.09)
-      : new THREE.BoxGeometry(0.09, 0.04, 0.88)
+      ? new THREE.BoxGeometry(1.0, 0.04, 0.09)
+      : new THREE.BoxGeometry(0.09, 0.04, 1.0)
 
     const wall = new THREE.Mesh(wallGeo, hullMat)
     const cap = new THREE.Mesh(capGeo, coralMat)
 
-    const offset = 0.4
+    const offset = 0.46
     if (side === 'north') {
-      wall.position.set(0, 0.25, -offset)
-      cap.position.set(0, 0.43, -offset)
+      wall.position.set(0, 0.37, -offset)
+      cap.position.set(0, 0.68, -offset)
     } else if (side === 'south') {
-      wall.position.set(0, 0.25, offset)
-      cap.position.set(0, 0.43, offset)
+      wall.position.set(0, 0.37, offset)
+      cap.position.set(0, 0.68, offset)
     } else if (side === 'west') {
-      wall.position.set(-offset, 0.25, 0)
-      cap.position.set(-offset, 0.43, 0)
+      wall.position.set(-offset, 0.37, 0)
+      cap.position.set(-offset, 0.68, 0)
     } else {
-      wall.position.set(offset, 0.25, 0)
-      cap.position.set(offset, 0.43, 0)
+      wall.position.set(offset, 0.37, 0)
+      cap.position.set(offset, 0.68, 0)
     }
 
     segment.add(wall, cap)
@@ -160,7 +160,7 @@ export function createCorridorSegment(
 
   walls.forEach(addWall)
 
-  // 4. Floor guide lines: center node + arms extending only toward open exits
+  // 4. Floor guide lines: center node + arms extending to the 1x1 tile edge toward open exits
   const centerNode = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.18), stripMat)
   centerNode.position.set(0, 0.085, 0)
   segment.add(centerNode)
@@ -171,11 +171,11 @@ export function createCorridorSegment(
 
     const isZAxis = side === 'north' || side === 'south'
     const armGeo = isZAxis
-      ? new THREE.BoxGeometry(0.18, 0.02, 0.31)
-      : new THREE.BoxGeometry(0.31, 0.02, 0.18)
+      ? new THREE.BoxGeometry(0.18, 0.02, 0.41)
+      : new THREE.BoxGeometry(0.41, 0.02, 0.18)
     const arm = new THREE.Mesh(armGeo, stripMat)
 
-    const armOffset = 0.245
+    const armOffset = 0.295
     if (side === 'north') arm.position.set(0, 0.085, -armOffset)
     else if (side === 'south') arm.position.set(0, 0.085, armOffset)
     else if (side === 'west') arm.position.set(-armOffset, 0.085, 0)

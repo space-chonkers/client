@@ -1,0 +1,24 @@
+/* ---------- JAM (Junior Astronaut Mission) theme ---------- */
+/*
+ * Tritanopia-friendly palette: reds/corals, creams and teal. States never rely
+ * on color alone (there is always text, an icon or a shape that tells them apart).
+ */
+.home-screen,
+.lobby-screen,
+.mission-screen {
+  --mars-sky: #f3cdb8;
+  --mars-rust: #a94a2e;
+  --mars-rust-dark: #6e2c19;
+  --ink: #2b1d1a;
+  --cream: #fff6ef;
+  --panel: rgba(255, 246, 239, 0.92);
+  --coral: #e5533c;
+  --coral-dark: #a8331f;
+  --teal: #108a8c;
+  --teal-dark: #0a5f61;
+  --button-depth: 6px;
+
+  font-family: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--mars-sky);
+}

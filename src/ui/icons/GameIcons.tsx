@@ -26,10 +26,10 @@ export const ICON_PNG_URLS: Record<GameIconType, string> = {
 }
 
 export const ICON_COLORS: Record<GameIconType, string> = {
-  oxygen: '#38bdf8',
-  water: '#00a896',
-  energy: '#ff9f1c',
-  food: '#52b788',
+  oxygen: '#b3f7ff',
+  water: '#1971ff',
+  energy: '#facc15',
+  food: '#fb923c',
   radiation: '#ff4d6d',
   build: '#e2e8f0',
   expand: '#2ec4b6',

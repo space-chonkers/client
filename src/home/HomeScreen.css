@@ -1,0 +1,158 @@
+.home-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.home-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'title'
+    '.'
+    'menu';
+  padding: 24px 16px;
+  pointer-events: none;
+}
+
+.home-overlay > * {
+  pointer-events: auto;
+}
+
+/* Logo */
+.home-title {
+  grid-area: title;
+  justify-self: center;
+  text-align: center;
+}
+
+/* SVG filter source for the sticker outline; takes no space in the layout */
+.home-title__filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Sticker-collage logo: each letter has its own face, color and tilt and they
+ * overlap. The whole word gets a cream die-cut border (SVG filter defined in
+ * HomeScreen) and a hard ink shadow toward the lower left (sun from the right).
+ * Sizes are in em so the logo keeps its proportions at every width.
+ */
+.home-title__logo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* Room for the lowered, tilted letters and the shadow so they never cover the subtitle */
+  margin: 0 0 0.16em;
+  font-size: clamp(5.5rem, 20vw, 12rem);
+  line-height: 0.8;
+  transform: rotate(-3deg);
+  filter:
+    url(#jam-logo-sticker-outline)
+    drop-shadow(-0.06em 0.06em 0 var(--ink))
+    drop-shadow(-0.05em 0.08em 0.09em rgba(43, 29, 26, 0.35));
+}
+
+.home-title__letter {
+  display: inline-block;
+}
+
+.home-title__letter--j {
+  font-family: 'Archivo Black', 'Nunito', sans-serif;
+  font-weight: 400;
+  color: var(--coral);
+  transform: translateY(0.05em) rotate(-8deg);
+}
+
+.home-title__letter--a {
+  margin-left: -0.16em;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-weight: 700;
+  font-size: 1.1em;
+  color: var(--ink);
+  transform: translateY(0.1em) rotate(5deg);
+}
+
+.home-title__letter--m {
+  margin-left: -0.14em;
+  font-family: 'Archivo Black', 'Nunito', sans-serif;
+  font-weight: 400;
+  color: var(--teal);
+  transform: translateY(-0.08em) rotate(-5deg);
+}
+
+.home-title__subtitle {
+  display: inline-block;
+  margin: 18px 0 0;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--mars-rust-dark);
+  color: var(--cream);
+  font-size: clamp(0.85rem, 2.6vw, 1.1rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Mode menu */
+.mode-menu {
+  grid-area: menu;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 520px);
+}
+
+.mode-menu__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+.mode-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  border-radius: 22px;
+  color: var(--cream);
+  --button-depth: 8px;
+}
+
+.mode-button--solo {
+  background: var(--coral);
+  box-shadow: 0 var(--button-depth) 0 var(--coral-dark), 0 var(--button-depth) 0 3px var(--ink);
+}
+
+.mode-button--coop {
+  background: var(--teal);
+  box-shadow: 0 var(--button-depth) 0 var(--teal-dark), 0 var(--button-depth) 0 3px var(--ink);
+}
+
+.mode-button--solo:hover:not(:disabled) {
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--coral-dark), 0 calc(var(--button-depth) + 2px) 0 3px var(--ink);
+}
+
+.mode-button--coop:hover:not(:disabled) {
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--teal-dark), 0 calc(var(--button-depth) + 2px) 0 3px var(--ink);
+}
+
+.mode-button__label {
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(43, 29, 26, 0.45);
+}
+
+@media (max-width: 640px) {
+  .home-overlay {
+    padding-top: 72px;
+  }
+}
