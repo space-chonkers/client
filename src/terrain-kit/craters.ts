@@ -203,20 +203,33 @@ function rimHeight(form: CraterForm, angle: number): number {
 }
 
 /** Applies one crater to the relief value `v` of the cell at (col, row). */
+/** How a carved crater blends into the surrounding relief; distances in rim radii. */
+const CRATER_SHAPE = {
+  /** Beyond this distance a crater leaves the relief untouched. */
+  reach: 2.4,
+  /** E-folding distance of the ejecta blanket outside the rim. */
+  ejectaDecay: 0.6,
+  /** Width of the central peak of complex craters. */
+  peakWidth: 0.2,
+  /** Non-additive craters level their floor from `levelFrom` inward, fully by `levelTo`. */
+  levelFrom: 1.02,
+  levelTo: 0.72,
+}
+
 export function applyCrater(crater: Crater, base: number, v: number, col: number, row: number): number {
   const form = craterForm(crater)
   const { d, angle } = craterPolar(crater, col, row)
-  if (d > 2.4) return v
+  if (d > CRATER_SHAPE.reach) return v
   const rim = rimHeight(form, angle)
   // Asymmetric rim: steeper toward the bowl, a long gentle flank outside.
   const rimLift = rim * Math.exp(-(((d - 1) / (d < 1 ? form.inner : form.outer)) ** 2))
-  const ejecta = d > 1 ? form.ejecta * Math.exp(-(d - 1) / 0.6) : 0
+  const ejecta = d > 1 ? form.ejecta * Math.exp(-(d - 1) / CRATER_SHAPE.ejectaDecay) : 0
   const bowlShape =
     crater.kind === 'shallow' ? (d < 1 ? (1 - d * d) ** 2 : 0) : d < form.floor ? 1 : 1 - smoothstep(form.floor, 1, d)
-  const bowl = -form.depth * bowlShape + form.peak * Math.exp(-((d / 0.2) ** 2))
+  const bowl = -form.depth * bowlShape + form.peak * Math.exp(-((d / CRATER_SHAPE.peakWidth) ** 2))
   if (form.additive) return v + bowl + rimLift + ejecta
   // Inside the rim the impact levels its own floor; outside it only adds rim and ejecta.
-  return v + rimLift + ejecta + (base + bowl - v) * smoothstep(1.02, 0.72, d)
+  return v + rimLift + ejecta + (base + bowl - v) * smoothstep(CRATER_SHAPE.levelFrom, CRATER_SHAPE.levelTo, d)
 }
 
 /** Crater population tunables; crater density is the main difference between young and old terrain. */
@@ -227,8 +240,32 @@ const CRATER_POPULATION = {
   heroRadiusShare: { min: 0.085, max: 0.11 },
   /** Other craters: `min + span × u^exponent` for uniform u, capped at `heroShare` × hero radius. */
   radius: { min: 1.2, span: 3.4, exponent: 2.6, heroShare: 0.75 },
+  /** Placement tries per crater wanted. */
+  attemptsPerCrater: 10,
+  /** Distance from the map edge, in cells: the hero keeps its whole rim on the map. */
+  heroMargin: 2,
+  margin: 1,
+  /** Crater-field mask: denser impacts where it is high. */
+  field: { frequency: 0.04, from: -0.2, to: 0.3 },
   /** Chance of keeping a candidate far outside crater-field regions. */
   outsideFieldChance: 0.15,
+  /** Centres closer than `overlap` × summed radii overlap; closer than `tooClose` × the larger radius would erase the older crater. */
+  overlap: 1.05,
+  tooClose: 0.9,
+}
+
+/**
+ * Odds of each crater kind, as cumulative thresholds on one roll. Craters on
+ * an escarpment (highland mask between `scarpBand` bounds) or overlapping
+ * another are always `overlapping`.
+ */
+const CRATER_KIND_ODDS = {
+  scarpBand: { min: 0.15, max: 0.85 },
+  hero: { fresh: 0.55 },
+  /** Craters below `smallRadius` (cells) use `small` odds, the rest `large`. */
+  smallRadius: 2,
+  small: { fresh: 0.45, shallow: 0.8 },
+  large: { fresh: 0.35, eroded: 0.8 },
 }
 
 /**
@@ -245,30 +282,31 @@ export function placeCraters(
   rows: number,
   highland: (col: number, row: number) => number,
 ): Crater[] {
-  const { cellsPerCrater, heroRadiusShare, radius: size, outsideFieldChance } = CRATER_POPULATION
+  const { cellsPerCrater, heroRadiusShare, radius: size, attemptsPerCrater, field: fieldMask, outsideFieldChance } = CRATER_POPULATION
+  const odds = CRATER_KIND_ODDS
   const target = Math.max(1, Math.round((cols * rows) / cellsPerCrater))
   const craters: Crater[] = []
   const heroRadius = Math.min(cols, rows) * rng.range(heroRadiusShare.min, heroRadiusShare.max)
-  for (let attempt = 0; attempt < target * 10 && craters.length < target; attempt++) {
+  for (let attempt = 0; attempt < target * attemptsPerCrater && craters.length < target; attempt++) {
     const hero = craters.length === 0
     const radius = hero ? heroRadius : Math.min(heroRadius * size.heroShare, size.min + size.span * rng.next() ** size.exponent)
-    const margin = hero ? radius + 2 : 1
+    const margin = hero ? radius + CRATER_POPULATION.heroMargin : CRATER_POPULATION.margin
     const col = rng.range(margin, cols - 1 - margin)
     const row = rng.range(margin, rows - 1 - margin)
     if (!hero) {
-      const inField = smoothstep(-0.2, 0.3, fbm(field, col * 0.04, row * 0.04, 2))
+      const inField = smoothstep(fieldMask.from, fieldMask.to, fbm(field, col * fieldMask.frequency, row * fieldMask.frequency, 2))
       if (rng.next() > outsideFieldChance + (1 - outsideFieldChance) * inField) continue
     }
     // A strong overlap would erase the older crater; a partial one overprints it.
-    const overlaps = craters.filter((c) => Math.hypot(c.col - col, c.row - row) < (c.radius + radius) * 1.05)
-    if (overlaps.some((c) => Math.hypot(c.col - col, c.row - row) < Math.max(c.radius, radius) * 0.9)) continue
+    const overlaps = craters.filter((c) => Math.hypot(c.col - col, c.row - row) < (c.radius + radius) * CRATER_POPULATION.overlap)
+    if (overlaps.some((c) => Math.hypot(c.col - col, c.row - row) < Math.max(c.radius, radius) * CRATER_POPULATION.tooClose)) continue
     const onScarp = highland(Math.round(col), Math.round(row))
     const roll = rng.next()
     let kind: CraterKind
-    if (overlaps.length > 0 || (onScarp > 0.15 && onScarp < 0.85)) kind = 'overlapping'
-    else if (hero) kind = roll < 0.55 ? 'fresh' : 'eroded'
-    else if (radius < 2) kind = roll < 0.45 ? 'fresh' : roll < 0.8 ? 'shallow' : 'eroded'
-    else kind = roll < 0.35 ? 'fresh' : roll < 0.8 ? 'eroded' : 'shallow'
+    if (overlaps.length > 0 || (onScarp > odds.scarpBand.min && onScarp < odds.scarpBand.max)) kind = 'overlapping'
+    else if (hero) kind = roll < odds.hero.fresh ? 'fresh' : 'eroded'
+    else if (radius < odds.smallRadius) kind = roll < odds.small.fresh ? 'fresh' : roll < odds.small.shallow ? 'shallow' : 'eroded'
+    else kind = roll < odds.large.fresh ? 'fresh' : roll < odds.large.eroded ? 'eroded' : 'shallow'
     craters.push({ col, row, radius, kind, seed: hash(rng.int(0, 0x7fffffff), 0xc7a)})
   }
   // Every map shows at least one fresh impact; promote the largest plain-ground small crater if needed.

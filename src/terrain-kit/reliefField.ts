@@ -10,12 +10,25 @@ import type { GridSpec, SurfaceWeights, TerrainField } from './terrain'
  * meshes it and dresses it.
  */
 
-/** World height of the deepest crater floor (relief −1). */
-const BASIN_DEPTH = 1.25
-/** Height of one raised shelf; terraced relief climbs in escarpment-bounded steps. */
-const SHELF_HEIGHT = 0.85
-/** Shelves per unit of positive relief: escarpments sit near relief 0.3 and 0.68. */
-const SHELF_RATE = 2.6
+/** Relief → world height (world units per relief unit unless noted). */
+const RELIEF_HEIGHT = {
+  /** World height of the deepest crater floor (relief −1). */
+  basinDepth: 1.25,
+  /** Above 1, shallow depressions stay nearly flat and only deep ones plunge. */
+  bowlExponent: 1.35,
+  /** Height of one raised shelf; terraced relief climbs in escarpment-bounded steps. */
+  shelfHeight: 0.85,
+  /** Shelves per unit of positive relief: escarpments sit near relief 0.3 and 0.68. */
+  shelfRate: 2.6,
+  /** Part of each shelf step (0..1) where the escarpment rises. */
+  scarpFrom: 0.6,
+  scarpTo: 0.88,
+  /** Gentle rise across each shelf, so tops are not perfectly flat. */
+  shelfSlope: 0.12,
+  /** Untiered rise for rims and swells: `gain × relief^exponent`. */
+  riseGain: 1.45,
+  riseExponent: 1.1,
+}
 
 /**
  * Relief → height. Negative relief sinks into bowls and near-zero stays a
@@ -25,11 +38,12 @@ const SHELF_RATE = 2.6
  * erosional knobs are terraced, so crater rims never turn into walls.
  */
 export function reliefHeight(relief: number, terrace = 1): number {
-  if (relief <= 0) return -BASIN_DEPTH * (-relief) ** 1.35
-  const s = relief * SHELF_RATE
+  const h = RELIEF_HEIGHT
+  if (relief <= 0) return -h.basinDepth * (-relief) ** h.bowlExponent
+  const s = relief * h.shelfRate
   const step = Math.floor(s)
-  const terraced = SHELF_HEIGHT * (step + smoothstep(0.6, 0.88, s - step)) + 0.12 * relief
-  const smooth = 1.45 * relief ** 1.1
+  const terraced = h.shelfHeight * (step + smoothstep(h.scarpFrom, h.scarpTo, s - step)) + h.shelfSlope * relief
+  const smooth = h.riseGain * relief ** h.riseExponent
   return smooth + (terraced - smooth) * terrace
 }
 
@@ -78,16 +92,33 @@ const TAU = Math.PI * 2
  * Each crater gets a seeded number of streaks: fresh impacts show them fully,
  * overlapping craters faintly, eroded and shallow craters not at all.
  */
-const EJECTA_RAY_STRENGTH: Record<CraterKind, number> = { fresh: 1, overlapping: 0.4, eroded: 0, shallow: 0 }
-const EJECTA_RAY_COUNT = { min: 7, max: 11 }
-/** Rays start just inside the rim and fade out by this distance, in rim radii. */
-const EJECTA_RAY_REACH = { inner: 0.9, outer: 2.7 }
-/** World height of a full-strength ray, and how strongly it paints the bright ejecta surface. */
-const EJECTA_RAY_HEIGHT = 0.035
-const EJECTA_RAY_SURFACE = 1.6
+const EJECTA_RAYS = {
+  strength: { fresh: 1, overlapping: 0.4, eroded: 0, shallow: 0 } satisfies Record<CraterKind, number>,
+  count: { min: 7, max: 11 },
+  /** Rays start just inside the rim and end by `outer`, in rim radii. */
+  inner: 0.9,
+  outer: 2.7,
+  /** Fade-in across the rim crest, then exponential decay outward (rim radii). */
+  fadeFrom: 0.92,
+  fadeTo: 1.12,
+  decay: 0.75,
+  /** Higher values make thinner, sharper streaks. */
+  sharpness: 5,
+  /** How far streaks wander off a straight spoke, and the wander noise frequency. */
+  wander: 0.8,
+  wanderFrequency: 0.9,
+  /** Cover between streaks, and the extra cover on a streak. */
+  floor: 0.35,
+  streak: 0.65,
+  /** World height of a full-strength ray, and how strongly it paints the bright ejecta surface. */
+  height: 0.035,
+  surface: 1.6,
+}
 
 /** Surface detail on crater rims and on the floors of degraded craters. */
 const CRATER_DETAIL = {
+  /** Craters further than this many radii from a point (per axis) are skipped. */
+  reach: 2.8,
   /** Half-width of the hummocky band around each rim crest, in rim radii. */
   crestWidth: 0.16,
   /** World height of the rim-crest hummocks. */
@@ -96,6 +127,66 @@ const CRATER_DETAIL = {
   infill: { outer: 0.72, inner: 0.4 },
   /** How strongly infilled floors take the pale lakebed surface. */
   infillSurface: 1.3,
+}
+
+/** Domain warp of the sample points (cells), so contours and class borders never follow the grid. */
+const FIELD_SAMPLING = {
+  warpFrequency: 0.55,
+  /** Warp applied when interpolating relief, and the stronger one when blending geology and region. */
+  reliefWarp: 0.22,
+  classWarp: 0.45,
+  /** Bicubic overshoot allowed beyond the [-1, 1] relief range. */
+  reliefLimit: 1.05,
+}
+
+/** Transverse dunes across the prevailing wind; lengths in world units. */
+const DUNES = {
+  /** Along-wind phase advance per world unit: sets the crest spacing. */
+  frequency: 2.1,
+  /** Sinuous crests: along-wind warp amount and its noise frequency. */
+  wander: 0.9,
+  wanderFrequency: 0.18,
+  /** Crest profile over one wavelength: stoss slope up to `brink`, slip face down to `slipFaceEnd`. */
+  brink: 0.74,
+  slipFaceEnd: 0.86,
+  stossExponent: 1.4,
+  /** Crests break into segments: noise frequencies across and along the wind, ramp, and height range. */
+  segmentAcross: 0.3,
+  segmentAlong: 0.1,
+  segmentFrom: -0.35,
+  segmentTo: 0.3,
+  segmentMin: 0.55,
+  segmentRange: 0.45,
+  height: 0.3,
+  ripples: { height: 0.015, frequency: 3.2, offset: 0.35 },
+}
+
+/** Small landform relief added on top of the interpolated cell relief (world units). */
+const MICRO_RELIEF = {
+  /** Lava plains end in a low lobate flow front, so the province edge is a landform, not a stain. */
+  flowFront: { height: 0.09, from: 0.3, to: 0.7 },
+  /** Rough ground: rubble at full weight, ridges and buttes less. */
+  roughness: { ridgeWeight: 0.6, butteWeight: 0.4, amplitude: 0.06, frequency: 2.4 },
+  /** Rim-crest hummocks: skipped below `minCrest`, noise at `frequency`. */
+  rimHummocks: { minCrest: 0.01, frequency: 1.5 },
+  /** Fine detail everywhere. */
+  detail: { amplitude: 0.018, frequency: 1.3 },
+}
+
+/** Landform shading baked into vertex colours (brightness multipliers ≈ 1). */
+const LANDFORM_SHADING = {
+  /** Hollows a touch darker, knobs a touch lighter, clamped. */
+  curvatureGain: 0.35,
+  curvatureMin: 0.88,
+  curvatureMax: 1.06,
+  /** High ground a touch lighter than low ground. */
+  reliefBase: 0.95,
+  reliefGain: 0.08,
+  reliefFrom: -0.8,
+  reliefTo: 0.9,
+  /** Sunlit dune crests, darker troughs; `midCrest` is the neutral crest height. */
+  duneGain: 0.42,
+  duneMidCrest: 0.4,
 }
 
 /**
@@ -117,27 +208,27 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
   const ejectaRays = map.craters.map((crater) => {
     const rng = createRng(hash(crater.seed, 0x7a))
     return {
-      count: rng.int(EJECTA_RAY_COUNT.min, EJECTA_RAY_COUNT.max),
+      count: rng.int(EJECTA_RAYS.count.min, EJECTA_RAYS.count.max),
       phase: rng.range(0, TAU),
-      strength: EJECTA_RAY_STRENGTH[crater.kind],
+      strength: EJECTA_RAYS.strength[crater.kind],
     }
   })
 
   /** World → continuous cell space, where cell (c, r) has its centre at (c, r). */
   const toCell = (x: number, z: number, amount: number) => ({
-    u: x / grid.cellSize + map.cols / 2 - 0.5 + warp(x * 0.55, z * 0.55) * amount,
-    v: z / grid.cellSize + map.rows / 2 - 0.5 + warp(z * 0.55 + 31, x * 0.55 - 17) * amount,
+    u: x / grid.cellSize + map.cols / 2 - 0.5 + warp(x * FIELD_SAMPLING.warpFrequency, z * FIELD_SAMPLING.warpFrequency) * amount,
+    v: z / grid.cellSize + map.rows / 2 - 0.5 + warp(z * FIELD_SAMPLING.warpFrequency + 31, x * FIELD_SAMPLING.warpFrequency - 17) * amount,
   })
 
   const reliefAt = (x: number, z: number) => {
-    const { u, v } = toCell(x, z, 0.22)
+    const { u, v } = toCell(x, z, FIELD_SAMPLING.reliefWarp)
     const i = Math.floor(u)
     const j = Math.floor(v)
     const rows = [-1, 0, 1, 2].map((dj) => {
       const r = (di: number) => cellAt(map, i + di, j + dj).relief
       return catmullRom(r(-1), r(0), r(1), r(2), u - i)
     })
-    return clamp(catmullRom(rows[0], rows[1], rows[2], rows[3], v - j), -1.05, 1.05)
+    return clamp(catmullRom(rows[0], rows[1], rows[2], rows[3], v - j), -FIELD_SAMPLING.reliefLimit, FIELD_SAMPLING.reliefLimit)
   }
 
   /**
@@ -161,7 +252,7 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
   }
   const sampleCells = (x: number, z: number) => {
     if (x === sample.x && z === sample.z) return sample
-    const { u, v } = toCell(x, z, 0.45)
+    const { u, v } = toCell(x, z, FIELD_SAMPLING.classWarp)
     const i = Math.floor(u)
     const j = Math.floor(v)
     bspline(u - i, wu)
@@ -196,16 +287,17 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
     const u = x / grid.cellSize + map.cols / 2 - 0.5
     const v = z / grid.cellSize + map.rows / 2 - 0.5
     map.craters.forEach((crater, k) => {
-      if (Math.abs(u - crater.col) > crater.radius * 2.8 || Math.abs(v - crater.row) > crater.radius * 2.8) return
+      if (Math.abs(u - crater.col) > crater.radius * CRATER_DETAIL.reach || Math.abs(v - crater.row) > crater.radius * CRATER_DETAIL.reach) return
       const { d, angle } = craterPolar(crater, u, v)
       crest += Math.exp(-(((d - 1) / CRATER_DETAIL.crestWidth) ** 2))
       if (crater.kind === 'eroded') infill = Math.max(infill, smoothstep(CRATER_DETAIL.infill.outer, CRATER_DETAIL.infill.inner, d))
       const rays = ejectaRays[k]
-      if (rays.strength === 0 || d < EJECTA_RAY_REACH.inner || d > EJECTA_RAY_REACH.outer) return
+      const e = EJECTA_RAYS
+      if (rays.strength === 0 || d < e.inner || d > e.outer) return
       // Angular streak pattern, warped so the rays wander instead of radiating as perfect spokes.
-      const streak = (0.5 + 0.5 * Math.cos(rays.count * angle + rays.phase + 0.8 * warp(x * 0.9, z * 0.9))) ** 5
-      const fade = smoothstep(0.92, 1.12, d) * Math.exp(-(d - 1) / 0.75)
-      ejecta = Math.max(ejecta, rays.strength * fade * (0.35 + 0.65 * streak))
+      const streak = (0.5 + 0.5 * Math.cos(rays.count * angle + rays.phase + e.wander * warp(x * e.wanderFrequency, z * e.wanderFrequency))) ** e.sharpness
+      const fade = smoothstep(e.fadeFrom, e.fadeTo, d) * Math.exp(-(d - 1) / e.decay)
+      ejecta = Math.max(ejecta, rays.strength * fade * (e.floor + e.streak * streak))
     })
     return { ejecta, crest: Math.min(crest, 1), infill }
   }
@@ -217,12 +309,13 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
    * and the along-wind phase used for ripples.
    */
   const duneAt = (x: number, z: number) => {
-    const along = (x * windX + z * windZ) * 2.1 + warp(x * 0.18, z * 0.18) * 0.9
+    const d = DUNES
+    const along = (x * windX + z * windZ) * d.frequency + warp(x * d.wanderFrequency, z * d.wanderFrequency) * d.wander
     const phase = along / TAU - Math.floor(along / TAU)
-    const crestShape = phase < 0.74 ? (phase / 0.74) ** 1.4 : phase < 0.86 ? 1 - smoothstep(0.74, 0.86, phase) : 0
+    const crestShape = phase < d.brink ? (phase / d.brink) ** d.stossExponent : phase < d.slipFaceEnd ? 1 - smoothstep(d.brink, d.slipFaceEnd, phase) : 0
     const across = -x * windZ + z * windX
-    const segment = smoothstep(-0.35, 0.3, duneBreak(across * 0.3, (x * windX + z * windZ) * 0.1))
-    return { crest: crestShape * (0.55 + 0.45 * segment), along }
+    const segment = smoothstep(d.segmentFrom, d.segmentTo, duneBreak(across * d.segmentAcross, (x * windX + z * windZ) * d.segmentAlong))
+    return { crest: crestShape * (d.segmentMin + d.segmentRange * segment), along }
   }
 
   return {
@@ -234,21 +327,24 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
       let duneHeight = 0
       if (dunes > 0) {
         const dune = duneAt(x, z)
-        duneHeight = dunes * (0.3 * dune.crest + 0.015 * ((1 - Math.abs(Math.sin(dune.along * 3.2))) ** 2 - 0.35))
+        const { ripples } = DUNES
+        duneHeight = dunes * (DUNES.height * dune.crest + ripples.height * ((1 - Math.abs(Math.sin(dune.along * ripples.frequency))) ** 2 - ripples.offset))
       }
-      // Lava plains end in a low lobate flow front, so the province edge is a landform, not a stain.
-      const flowFront = 0.09 * smoothstep(0.3, 0.7, region.get('volcanic') ?? 0)
-      const roughness = (geology.get('rubble') ?? 0) + 0.6 * (geology.get('ridge') ?? 0) + 0.4 * (geology.get('butte') ?? 0)
+      const { flowFront: front, roughness: roughGround, rimHummocks, detail: fine } = MICRO_RELIEF
+      const flowFront = front.height * smoothstep(front.from, front.to, region.get('volcanic') ?? 0)
+      const roughness = (geology.get('rubble') ?? 0) + roughGround.ridgeWeight * (geology.get('ridge') ?? 0) + roughGround.butteWeight * (geology.get('butte') ?? 0)
       const { crest, ejecta } = craterDetail(x, z)
       return (
         reliefHeight(reliefAt(x, z), terrace) +
         flowFront +
         duneHeight +
-        (roughness > 0 ? 0.06 * roughness * fbm(rough, x * 2.4, z * 2.4, 2) : 0) +
+        (roughness > 0 ? roughGround.amplitude * roughness * fbm(rough, x * roughGround.frequency, z * roughGround.frequency, 2) : 0) +
         // Uneven rim crests and hummocky ejecta, so rims never read as a lathe-turned ring.
-        (crest > 0.01 ? crest * CRATER_DETAIL.crestRoughness * fbm(rough, x * 1.5 + 11, z * 1.5, 2) : 0) +
-        ejecta * EJECTA_RAY_HEIGHT +
-        0.018 * fbm(detail, x * 1.3, z * 1.3, 2)
+        (crest > rimHummocks.minCrest
+          ? crest * CRATER_DETAIL.crestRoughness * fbm(rough, x * rimHummocks.frequency + 11, z * rimHummocks.frequency, 2)
+          : 0) +
+        ejecta * EJECTA_RAYS.height +
+        fine.amplitude * fbm(detail, x * fine.frequency, z * fine.frequency, 2)
       )
     },
     surfaceAt(x, z) {
@@ -260,7 +356,7 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
       for (const [g, w] of geology) add(GEOLOGY_ENTRIES[g], w)
       for (const [r, w] of region) add(REGION_ENTRIES[r], w)
       const { ejecta, infill } = craterDetail(x, z)
-      if (ejecta > 0) out.ejecta = (out.ejecta ?? 0) + EJECTA_RAY_SURFACE * ejecta
+      if (ejecta > 0) out.ejecta = (out.ejecta ?? 0) + EJECTA_RAYS.surface * ejecta
       // Degraded craters hold pale, layered sediment on their flat floors.
       if (infill > 0) out.lakebed = (out.lakebed ?? 0) + CRATER_DETAIL.infillSurface * infill
       return out
@@ -270,9 +366,14 @@ export function createReliefField(map: ReliefMap, grid: GridSpec): TerrainField 
       const { curvature, relief } = sampleCells(x, z)
       const dunes = geology.get('dunes') ?? 0
       // Sunlit sand on dune crests, darker sand gathered in the troughs: dune fields read as ridged, not stained.
-      const duneShade = dunes > 0 ? 1 + dunes * 0.42 * (duneAt(x, z).crest - 0.4) : 1
+      const s = LANDFORM_SHADING
+      const duneShade = dunes > 0 ? 1 + dunes * s.duneGain * (duneAt(x, z).crest - s.duneMidCrest) : 1
       // Hollows and crater bowls a touch darker, crests and high ground a touch lighter.
-      return clamp(1 + 0.35 * curvature, 0.88, 1.06) * (0.95 + 0.08 * smoothstep(-0.8, 0.9, relief)) * duneShade
+      return (
+        clamp(1 + s.curvatureGain * curvature, s.curvatureMin, s.curvatureMax) *
+        (s.reliefBase + s.reliefGain * smoothstep(s.reliefFrom, s.reliefTo, relief)) *
+        duneShade
+      )
     },
   }
 }

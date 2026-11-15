@@ -95,6 +95,37 @@ export function prevailingWind(seed: number): number {
 // Relief
 
 /**
+ * Macro and meso relief composition, in relief units unless noted. Shares are
+ * fractions of the map, picked per seed between `min` and `max`.
+ */
+const LANDFORMS = {
+  /** Domain warp that bends the macro field, in cells. */
+  warp: { amplitude: 6, frequency: 0.05 },
+  macro: { frequency: 0.032, octaves: 3 },
+  /** Small-scale wobble on the threshold field: lobes and embayments along escarpments. */
+  edgeWobble: { amplitude: 0.1, frequency: 0.16 },
+  highlandShare: { min: 0.16, max: 0.28 },
+  /** Share of the highlands that rises to the upper tier. */
+  topTierShare: 0.42,
+  basinShare: { min: 0.12, max: 0.2 },
+  /** Half-width of the escarpment ramp, in threshold-field units. */
+  edgeSoftness: 0.025,
+  /** Basin margin ramp, from just above to just below the basin threshold. */
+  basinEdge: { above: 0.05, below: 0.03 },
+  /** Ridged-noise canyons: deep through the highlands, shallow channels across the plains. */
+  canyon: { frequency: 0.07, ridgeFrom: 0.88, ridgeTo: 0.97, highlandDepth: 0.36, plainsDepth: 0.06 },
+  /** Erosional outliers in a band just below the escarpment threshold. */
+  knob: { bandFrom: 0.12, bandTo: 0.03, frequency: 0.3, thresholdFrom: 0.3, thresholdTo: 0.6, height: 0.46 },
+  /** Gentle undulation everywhere, plus a hint of the macro field. */
+  base: { amplitude: 0.09, frequency: 0.08, octaves: 3, macroWeight: 0.06 },
+  highland: { lift: 0.4, roughness: 0.04, roughnessFrequency: 0.2, topLift: 0.36 },
+  /** Near-flat sediment floor of basins. */
+  basinFloor: { level: -0.3, roughness: 0.025, frequency: 0.15 },
+  /** Cells a crater can affect around its centre, in crater radii. */
+  craterReach: 2.7,
+}
+
+/**
  * Seeded relief for every cell, composed top-down so every seed reads as a
  * landscape rather than noise:
  * - macro: a warped regional field split by quantiles into highland massifs
@@ -111,55 +142,63 @@ export function generateLandforms(seed: number, cols: number, rows: number): { r
   const edgeNoise = createNoise2D(hash(seed, 0x4e3))
   const craterField = createNoise2D(hash(seed, 0x4e4))
   const medium = createNoise2D(hash(seed, 0x4e5))
-  const warp = createNoise2D(hash(seed, 0x4e7))
+  const warpNoise = createNoise2D(hash(seed, 0x4e7))
   const canyonNoise = createNoise2D(hash(seed, 0x4e8))
   const knobNoise = createNoise2D(hash(seed, 0x4e9))
 
+  const { warp, edgeWobble, edgeSoftness, basinEdge, canyon: canyons, knob: knobs, base, highland, basinFloor } = LANDFORMS
   const count = cols * rows
   const macro = new Float64Array(count)
   const edge = new Float64Array(count)
   for (let index = 0; index < count; index++) {
     const col = index % cols
     const row = Math.floor(index / cols)
-    const wx = col + 6 * warp(col * 0.05, row * 0.05)
-    const wz = row + 6 * warp(row * 0.05 + 40, col * 0.05 - 20)
-    macro[index] = fbm(macroNoise, wx * 0.032, wz * 0.032, 3)
-    // Small-scale wobble on the threshold field gives escarpments lobes and embayments.
-    edge[index] = macro[index] + 0.1 * fbm(edgeNoise, col * 0.16, row * 0.16, 2)
+    const wx = col + warp.amplitude * warpNoise(col * warp.frequency, row * warp.frequency)
+    const wz = row + warp.amplitude * warpNoise(row * warp.frequency + 40, col * warp.frequency - 20)
+    macro[index] = fbm(macroNoise, wx * LANDFORMS.macro.frequency, wz * LANDFORMS.macro.frequency, LANDFORMS.macro.octaves)
+    edge[index] = macro[index] + edgeWobble.amplitude * fbm(edgeNoise, col * edgeWobble.frequency, row * edgeWobble.frequency, 2)
   }
   const sorted = Array.from(edge).sort((a, b) => a - b)
   const quantile = (p: number) => sorted[Math.floor(clamp(p, 0, 1) * (count - 1))]
-  const highShare = rng.range(0.16, 0.28)
+  const highShare = rng.range(LANDFORMS.highlandShare.min, LANDFORMS.highlandShare.max)
   const tHigh = quantile(1 - highShare)
-  const tTop = quantile(1 - highShare * 0.42)
-  const tBasin = quantile(rng.range(0.12, 0.2))
+  const tTop = quantile(1 - highShare * LANDFORMS.topTierShare)
+  const tBasin = quantile(rng.range(LANDFORMS.basinShare.min, LANDFORMS.basinShare.max))
 
-  const highlandAt = (col: number, row: number) => smoothstep(tHigh - 0.025, tHigh + 0.025, edge[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)])
+  const highlandAt = (col: number, row: number) =>
+    smoothstep(tHigh - edgeSoftness, tHigh + edgeSoftness, edge[clamp(row, 0, rows - 1) * cols + clamp(col, 0, cols - 1)])
   const relief = new Array<number>(count)
   for (let index = 0; index < count; index++) {
     const col = index % cols
     const row = Math.floor(index / cols)
     const e = edge[index]
-    const high = smoothstep(tHigh - 0.025, tHigh + 0.025, e)
-    const top = smoothstep(tTop - 0.025, tTop + 0.025, e)
-    const basin = smoothstep(tBasin + 0.05, tBasin - 0.03, e)
+    const high = smoothstep(tHigh - edgeSoftness, tHigh + edgeSoftness, e)
+    const top = smoothstep(tTop - edgeSoftness, tTop + edgeSoftness, e)
+    const basin = smoothstep(tBasin + basinEdge.above, tBasin - basinEdge.below, e)
     // Ridged noise lines: canyons through the massif, faint channels across the plains.
-    const canyon = smoothstep(0.88, 0.97, 1 - Math.abs(canyonNoise(col * 0.07 + 3.7, row * 0.07 - 1.3)))
+    const canyon = smoothstep(
+      canyons.ridgeFrom,
+      canyons.ridgeTo,
+      1 - Math.abs(canyonNoise(col * canyons.frequency + 3.7, row * canyons.frequency - 1.3)),
+    )
     // Erosional outliers stand just in front of the escarpment.
-    const knob = (1 - high) * smoothstep(tHigh - 0.12, tHigh - 0.03, e) * smoothstep(0.3, 0.6, knobNoise(col * 0.3, row * 0.3))
-    let v = 0.09 * fbm(medium, col * 0.08, row * 0.08, 3) + 0.06 * macro[index]
-    v += high * (0.4 + 0.04 * fbm(medium, col * 0.2 + 9, row * 0.2, 2)) + 0.36 * top
-    v -= canyon * (0.36 * high + 0.06 * (1 - high))
-    v += 0.46 * knob
+    const knob =
+      (1 - high) *
+      smoothstep(tHigh - knobs.bandFrom, tHigh - knobs.bandTo, e) *
+      smoothstep(knobs.thresholdFrom, knobs.thresholdTo, knobNoise(col * knobs.frequency, row * knobs.frequency))
+    let v = base.amplitude * fbm(medium, col * base.frequency, row * base.frequency, base.octaves) + base.macroWeight * macro[index]
+    v += high * (highland.lift + highland.roughness * fbm(medium, col * highland.roughnessFrequency + 9, row * highland.roughnessFrequency, 2)) + highland.topLift * top
+    v -= canyon * (canyons.highlandDepth * high + canyons.plainsDepth * (1 - high))
+    v += knobs.height * knob
     // Basins hold a near-flat sediment floor.
-    v += (-0.3 + 0.025 * fbm(medium, col * 0.15, row * 0.15 - 7, 2) - v) * basin
+    v += (basinFloor.level + basinFloor.roughness * fbm(medium, col * basinFloor.frequency, row * basinFloor.frequency - 7, 2) - v) * basin
     relief[index] = v
   }
 
   const craters = placeCraters(rng, craterField, cols, rows, highlandAt)
   for (const crater of craters) {
     const base = relief[clamp(Math.round(crater.row), 0, rows - 1) * cols + clamp(Math.round(crater.col), 0, cols - 1)]
-    const reach = Math.ceil(crater.radius * 2.7)
+    const reach = Math.ceil(crater.radius * LANDFORMS.craterReach)
     for (let row = Math.max(0, Math.floor(crater.row - reach)); row <= Math.min(rows - 1, Math.ceil(crater.row + reach)); row++) {
       for (let col = Math.max(0, Math.floor(crater.col - reach)); col <= Math.min(cols - 1, Math.ceil(crater.col + reach)); col++) {
         relief[row * cols + col] = applyCrater(crater, base, relief[row * cols + col], col, row)
@@ -216,8 +255,9 @@ export function createReliefMap(
     if (region === 'highlands' || region === 'craterfield') return false
     const col = index % cols
     const row = Math.floor(index / cols)
-    for (let dr = -3; dr <= 3; dr++) {
-      for (let dc = -3; dc <= 3; dc++) {
+    const reach = GEOLOGY_THRESHOLDS.scarpNeighbourhood
+    for (let dr = -reach; dr <= reach; dr++) {
+      for (let dc = -reach; dc <= reach; dc++) {
         if (regions[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)] === 'highlands') return true
       }
     }
@@ -225,7 +265,7 @@ export function createReliefMap(
   })
   const cluster = createNoise2D(hash(seed, 0xc1))
   const features: TerrainFeature[] = measured.map((cell, index) =>
-    baseFeature(cell, nearest[index], nearScarp[index], value, fbm(cluster, cell.col * 0.18, cell.row * 0.18, 2), rng.next(), rng.next()),
+    baseFeature(cell, nearest[index], nearScarp[index], value, fbm(cluster, cell.col * FEATURE_ODDS.clump.frequency, cell.row * FEATURE_ODDS.clump.frequency, 2), rng.next(), rng.next()),
   )
   placeMinerals(measured, nearest, features, cols, rng, mineralRules)
 
@@ -249,6 +289,27 @@ export function generateReliefMap(seed: number, cols = MAP_SIZE, rows = MAP_SIZE
   return createReliefMap(seed, cols, rows, relief, craters, options)
 }
 
+/** Thresholds that turn a cell's relief, slope and neighbourhood into its geology. */
+const GEOLOGY_THRESHOLDS = {
+  /** A cell belongs to the nearest crater within this distance, in rim radii. */
+  craterReach: 1.45,
+  /** Inside this distance a rimmed crater's cell is floor; beyond it, rim. */
+  craterFloor: 0.82,
+  /** Shallow craters have no rim; only their floor counts. */
+  shallowCraterFloor: 0.8,
+  /** Deep bowls read as craters even without a crater record (authored relief). */
+  bowlMaxRelief: -0.45,
+  /** Isolated knobs outside crater fields are erosional remnants. */
+  butte: { minRelief: 0.35, minCurvature: 0.2 },
+  highlands: { ridgeSlope: 0.3, plateauRelief: 0.6, sedimentRelief: 0.25 },
+  basinSedimentSlope: 0.1,
+  duneRubbleSlope: 0.35,
+  /** Steep plains are rubble; moderately steep ones next to highlands are a talus apron. */
+  plains: { rubbleSlope: 0.4, scarpFootSlope: 0.22 },
+  /** Low ground within this many cells of highlands can hold detached mesas and buttes. */
+  scarpNeighbourhood: 3,
+}
+
 interface CraterHit {
   crater: Crater
   d: number
@@ -258,7 +319,7 @@ function nearestCrater(craters: readonly Crater[], col: number, row: number): Cr
   let best: CraterHit | null = null
   for (const crater of craters) {
     const { d } = craterPolar(crater, col, row)
-    if (d < 1.45 && (!best || d < best.d)) best = { crater, d }
+    if (d < GEOLOGY_THRESHOLDS.craterReach && (!best || d < best.d)) best = { crater, d }
   }
   return best
 }
@@ -271,7 +332,14 @@ function nearestCrater(craters: readonly Crater[], col: number, row: number): Cr
  * quantiles so every seed gets each province. A majority filter removes
  * speckles so regions read as coherent areas.
  */
-const REGION_THRESHOLDS = {
+const REGION_RULES = {
+  /** Gaussian smoothing of relief before thresholding: kernel half-size in cells and spread. */
+  smoothing: { radius: 2, spread: 4 },
+  /** Frequency of the broad masks that split open plains into volcanic plains and dune fields. */
+  volcanicMaskFrequency: 0.045,
+  duneMaskFrequency: 0.06,
+  /** Sand gathers in low ground: how strongly the dune mask favours lower smoothed relief. */
+  duneLowGroundBias: 0.8,
   /** Cells this close to a non-shallow crater (in rim radii) belong to its crater field. */
   craterFieldReach: 1.4,
   /** Smoothed relief at or above this is highland. */
@@ -290,14 +358,15 @@ function classifyRegions(
   relief: readonly number[],
   nearest: readonly (CraterHit | null)[],
 ): Region[] {
+  const { smoothing, volcanicMaskFrequency, duneMaskFrequency } = REGION_RULES
   const smooth = relief.map((_, index) => {
     const col = index % cols
     const row = Math.floor(index / cols)
     let sum = 0
     let weight = 0
-    for (let dr = -2; dr <= 2; dr++) {
-      for (let dc = -2; dc <= 2; dc++) {
-        const w = Math.exp(-(dc * dc + dr * dr) / 4)
+    for (let dr = -smoothing.radius; dr <= smoothing.radius; dr++) {
+      for (let dc = -smoothing.radius; dc <= smoothing.radius; dc++) {
+        const w = Math.exp(-(dc * dc + dr * dr) / smoothing.spread)
         sum += w * relief[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)]
         weight += w
       }
@@ -306,15 +375,16 @@ function classifyRegions(
   })
   const volcanicNoise = createNoise2D(hash(seed, 0x60a))
   const sandNoise = createNoise2D(hash(seed, 0x5a))
-  const volcanic = relief.map((_, i) => fbm(volcanicNoise, (i % cols) * 0.045, Math.floor(i / cols) * 0.045, 2))
-  // Sand gathers in low ground, so the dune mask favours lower smoothed relief.
-  const sand = relief.map((_, i) => fbm(sandNoise, (i % cols) * 0.06, Math.floor(i / cols) * 0.06, 2) - 0.8 * smooth[i])
+  const volcanic = relief.map((_, i) => fbm(volcanicNoise, (i % cols) * volcanicMaskFrequency, Math.floor(i / cols) * volcanicMaskFrequency, 2))
+  const sand = relief.map(
+    (_, i) => fbm(sandNoise, (i % cols) * duneMaskFrequency, Math.floor(i / cols) * duneMaskFrequency, 2) - REGION_RULES.duneLowGroundBias * smooth[i],
+  )
 
   const regions: Region[] = relief.map((_, i) => {
     const hit = nearest[i]
-    if (hit && hit.crater.kind !== 'shallow' && hit.d < REGION_THRESHOLDS.craterFieldReach) return 'craterfield'
-    if (smooth[i] >= REGION_THRESHOLDS.highlandsMinRelief) return 'highlands'
-    if (smooth[i] <= REGION_THRESHOLDS.basinMaxRelief) return 'basin'
+    if (hit && hit.crater.kind !== 'shallow' && hit.d < REGION_RULES.craterFieldReach) return 'craterfield'
+    if (smooth[i] >= REGION_RULES.highlandsMinRelief) return 'highlands'
+    if (smooth[i] <= REGION_RULES.basinMaxRelief) return 'basin'
     return 'plains'
   })
   const open = regions.map((region, i) => (region === 'plains' ? i : -1)).filter((i) => i >= 0)
@@ -322,8 +392,8 @@ function classifyRegions(
     const list = open.map((i) => values[i]).sort((a, b) => b - a)
     return list.length ? list[Math.floor(clamp(share, 0, 1) * (list.length - 1))] : Infinity
   }
-  const volcanicCut = cut(volcanic, REGION_THRESHOLDS.volcanicShare)
-  const sandCut = cut(sand, REGION_THRESHOLDS.dunefieldShare)
+  const volcanicCut = cut(volcanic, REGION_RULES.volcanicShare)
+  const sandCut = cut(sand, REGION_RULES.dunefieldShare)
   for (const i of open) {
     if (volcanic[i] >= volcanicCut) regions[i] = 'volcanic'
     else if (sand[i] >= sandCut) regions[i] = 'dunefield'
@@ -364,27 +434,52 @@ function classify(
   col: number,
   row: number,
 ): Geology {
-  if (hit && hit.crater.kind !== 'shallow') return hit.d < 0.82 ? 'crater' : 'rim'
-  if (hit && hit.d < 0.8) return 'crater'
+  const t = GEOLOGY_THRESHOLDS
+  if (hit && hit.crater.kind !== 'shallow') return hit.d < t.craterFloor ? 'crater' : 'rim'
+  if (hit && hit.d < t.shallowCraterFloor) return 'crater'
   // Authored relief has no crater list: fall back to deep bowls.
-  if (relief <= -0.45 && curvature < 0) return 'crater'
-  // Isolated knobs anywhere outside crater fields are erosional remnants.
-  if (relief >= 0.35 && curvature > 0.2) return 'butte'
+  if (relief <= t.bowlMaxRelief && curvature < 0) return 'crater'
+  if (relief >= t.butte.minRelief && curvature > t.butte.minCurvature) return 'butte'
   switch (region) {
     case 'highlands':
-      if (slope >= 0.3) return 'ridge'
-      return relief >= 0.6 ? 'plateau' : relief >= 0.25 ? 'sediment' : 'plain'
+      if (slope >= t.highlands.ridgeSlope) return 'ridge'
+      return relief >= t.highlands.plateauRelief ? 'plateau' : relief >= t.highlands.sedimentRelief ? 'sediment' : 'plain'
     case 'basin':
-      return slope >= 0.1 ? 'sediment' : 'basin'
+      return slope >= t.basinSedimentSlope ? 'sediment' : 'basin'
     case 'dunefield':
-      return slope >= 0.35 ? 'rubble' : 'dunes'
+      return slope >= t.duneRubbleSlope ? 'rubble' : 'dunes'
     default: {
-      if (slope >= 0.4) return 'rubble'
+      if (slope >= t.plains.rubbleSlope) return 'rubble'
       // Talus apron at the foot of an escarpment.
-      const belowScarp = slope >= 0.22 && [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => regions[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)] === 'highlands'))
+      const belowScarp = slope >= t.plains.scarpFootSlope && [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => regions[clamp(row + dr, 0, rows - 1) * cols + clamp(col + dc, 0, cols - 1)] === 'highlands'))
       return belowScarp ? 'rubble' : 'plain'
     }
   }
+}
+
+/**
+ * Odds of each feature hint per geology. Odds are cumulative thresholds on
+ * one uniform roll, checked in order: `{ rockCluster: 0.14, boulder: 0.3 }`
+ * gives 14% clusters and 16% boulders. Clump-dependent odds add
+ * `perClump × clumped` to their `base`.
+ */
+const FEATURE_ODDS = {
+  /** Debris and crack networks gather in patches: the clump mask and its ramp. */
+  clump: { frequency: 0.18, from: -0.05, to: 0.35 },
+  /** Eroded crater floors crack where they are flat and clumped. */
+  crater: { crackMaxSlope: 0.12, crackMinClump: 0.4, cracks: 0.25, boulder: 0.05 },
+  /** Fresh rims carry ejecta blocks; degraded ones only the odd boulder. */
+  rim: { fresh: { rockCluster: 0.14, boulder: 0.3, pebbles: 0.45 }, boulder: 0.05 },
+  /** Dried lakebed: polygonal mud cracks in contiguous patches. */
+  basin: { crackMinClump: 0.7, cracks: 0.3 },
+  /** Outliers left behind as the escarpment retreated, then sparse boulders. */
+  plain: { outlierMaxSlope: 0.15, outlier: 0.05, mesaShare: 0.45, boulder: { base: 0.006, perClump: 0.02 } },
+  rubble: { rockCluster: 0.22, boulder: 0.38, pebbles: { base: 0.38, perClump: 0.5 } },
+  sediment: { outcrop: 0.06, boulder: 0.09 },
+  /** Outcrops only on broad high ground: every orthogonal neighbour at least `broadRelief`. */
+  plateau: { broadRelief: 0.55, outcrop: 0.04, boulder: 0.06 },
+  ridge: { pillar: 0.04, boulder: 0.14, rockCluster: 0.2, pebbles: { base: 0.2, perClump: 0.3 } },
+  butte: { butteShare: 0.6 },
 }
 
 function baseFeature(
@@ -396,41 +491,48 @@ function baseFeature(
   roll: number,
   pick: number,
 ): TerrainFeature {
-  // Debris and crack networks gather in patches instead of sprinkling evenly.
-  const clumped = smoothstep(-0.05, 0.35, cluster)
+  const odds = FEATURE_ODDS
+  const clumped = smoothstep(odds.clump.from, odds.clump.to, cluster)
   switch (cell.geology) {
-    case 'crater':
-      if (hit?.crater.kind === 'eroded' && cell.slope < 0.12 && clumped > 0.4) return roll < 0.25 ? 'cracks' : 'none'
-      return roll < 0.05 ? 'boulder' : 'none'
-    case 'rim':
-      // Fresh rims carry ejecta blocks; degraded ones only the odd boulder.
-      if (hit?.crater.kind === 'fresh') return roll < 0.14 ? 'rockCluster' : roll < 0.3 ? 'boulder' : roll < 0.45 ? 'pebbles' : 'none'
-      return roll < 0.05 ? 'boulder' : 'none'
+    case 'crater': {
+      const { crackMaxSlope, crackMinClump, cracks, boulder } = odds.crater
+      if (hit?.crater.kind === 'eroded' && cell.slope < crackMaxSlope && clumped > crackMinClump) return roll < cracks ? 'cracks' : 'none'
+      return roll < boulder ? 'boulder' : 'none'
+    }
+    case 'rim': {
+      const { fresh, boulder } = odds.rim
+      if (hit?.crater.kind === 'fresh') return roll < fresh.rockCluster ? 'rockCluster' : roll < fresh.boulder ? 'boulder' : roll < fresh.pebbles ? 'pebbles' : 'none'
+      return roll < boulder ? 'boulder' : 'none'
+    }
     case 'basin':
-      // Dried lakebed: polygonal mud cracks in contiguous patches.
-      return clumped > 0.7 && roll < 0.3 ? 'cracks' : 'none'
-    case 'plain':
-      // Outliers left behind as the escarpment retreated.
-      if (nearScarp && cell.slope < 0.15 && roll < 0.05) return pick < 0.45 ? 'mesa' : 'butte'
-      return roll < 0.006 + 0.02 * clumped ? 'boulder' : 'none'
+      return clumped > odds.basin.crackMinClump && roll < odds.basin.cracks ? 'cracks' : 'none'
+    case 'plain': {
+      const { outlierMaxSlope, outlier, mesaShare, boulder } = odds.plain
+      if (nearScarp && cell.slope < outlierMaxSlope && roll < outlier) return pick < mesaShare ? 'mesa' : 'butte'
+      return roll < boulder.base + boulder.perClump * clumped ? 'boulder' : 'none'
+    }
     case 'dunes':
       return 'none'
-    case 'rubble':
-      return roll < 0.22 ? 'rockCluster' : roll < 0.38 ? 'boulder' : roll < 0.38 + 0.5 * clumped ? 'pebbles' : 'none'
-    case 'sediment':
-      return roll < 0.06 ? 'outcrop' : roll < 0.09 ? 'boulder' : 'none'
-    case 'plateau': {
-      // A mesa cap only rises from broad high ground: every orthogonal neighbour must be raised too.
-      const { col, row } = cell
-      const broad = [value(col - 1, row), value(col + 1, row), value(col, row - 1), value(col, row + 1)].every((v) => v >= 0.55)
-      // The highland itself is the table; only small residual outcrops stand on it.
-      if (broad && roll < 0.04) return 'outcrop'
-      return roll < 0.06 ? 'boulder' : 'none'
+    case 'rubble': {
+      const { rockCluster, boulder, pebbles } = odds.rubble
+      return roll < rockCluster ? 'rockCluster' : roll < boulder ? 'boulder' : roll < pebbles.base + pebbles.perClump * clumped ? 'pebbles' : 'none'
     }
-    case 'ridge':
-      return roll < 0.04 ? 'pillar' : roll < 0.14 ? 'boulder' : roll < 0.2 ? 'rockCluster' : roll < 0.2 + 0.3 * clumped ? 'pebbles' : 'none'
+    case 'sediment':
+      return roll < odds.sediment.outcrop ? 'outcrop' : roll < odds.sediment.boulder ? 'boulder' : 'none'
+    case 'plateau': {
+      const { broadRelief, outcrop, boulder } = odds.plateau
+      const { col, row } = cell
+      const broad = [value(col - 1, row), value(col + 1, row), value(col, row - 1), value(col, row + 1)].every((v) => v >= broadRelief)
+      // The highland itself is the table; only small residual outcrops stand on it.
+      if (broad && roll < outcrop) return 'outcrop'
+      return roll < boulder ? 'boulder' : 'none'
+    }
+    case 'ridge': {
+      const { pillar, boulder, rockCluster, pebbles } = odds.ridge
+      return roll < pillar ? 'pillar' : roll < boulder ? 'boulder' : roll < rockCluster ? 'rockCluster' : roll < pebbles.base + pebbles.perClump * clumped ? 'pebbles' : 'none'
+    }
     case 'butte':
-      return pick < 0.6 ? 'butte' : 'pillar'
+      return pick < odds.butte.butteShare ? 'butte' : 'pillar'
   }
 }
 

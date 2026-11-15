@@ -83,10 +83,17 @@ everything that builds meshes depends on them, never the reverse.
 - Same seed and options → identical map and meshes.
 - Relief values are clamped to [-1, 1] and rounded to two decimals.
 - Every map has one large "hero" crater and at least one fresh crater when possible.
-- Crater shapes come from the `CRATER_MORPHOLOGY` table, one entry per crater kind.
-  Crater counts and sizes come from `CRATER_POPULATION`, province borders from
-  `REGION_THRESHOLDS`, and crater surface detail from `CRATER_DETAIL` and the
-  `EJECTA_RAY_*` constants.
+- Generation is tuned through documented parameter tables, one per concern:
+
+  | File | Tables |
+  |---|---|
+  | `reliefMap.ts` | `LANDFORMS` (relief composition), `REGION_RULES`, `GEOLOGY_THRESHOLDS`, `FEATURE_ODDS` |
+  | `craters.ts` | `CRATER_MORPHOLOGY`, `CRATER_SHAPE`, `CRATER_POPULATION`, `CRATER_KIND_ODDS` |
+  | `reliefField.ts` | `RELIEF_HEIGHT`, `FIELD_SAMPLING`, `DUNES`, `MICRO_RELIEF`, `LANDFORM_SHADING`, `EJECTA_RAYS`, `CRATER_DETAIL` |
+  | `reliefTerrain.ts` | `FEATURE_PLACEMENT`, `PLACEMENT_SEARCH`, `ROCK_SCATTER`, `SCATTER_DENSITY` |
+  | `mineralDistribution.ts` | `DEFAULT_MINERAL_RULES` (the only table a map can override, via `mineralRules`) |
+
+  Feature and crater-kind odds are cumulative thresholds on a single roll.
 - **Minerals:** visuals (`MINERAL_APPEARANCE`, factories in `minerals.ts`) are kept
   separate from distribution (`DEFAULT_MINERAL_RULES`). A map can pass its own
   `mineralRules` without touching the visuals.
