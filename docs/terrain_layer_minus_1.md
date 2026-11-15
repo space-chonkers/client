@@ -96,8 +96,13 @@ everything that builds meshes depends on them, never the reverse.
   | `reliefField.ts` | `RELIEF_HEIGHT`, `FIELD_SAMPLING`, `DUNES`, `MICRO_RELIEF`, `LANDFORM_SHADING`, `EJECTA_RAYS`, `CRATER_DETAIL` |
   | `reliefTerrain.ts` | `FEATURE_PLACEMENT`, `PLACEMENT_SEARCH`, `ROCK_SCATTER`, `SCATTER_DENSITY` |
   | `mineralDistribution.ts` | `DEFAULT_MINERAL_RULES` (the only table a map can override, via `mineralRules`) |
+  | `rocks.ts` | `VARIANTS`, `ROCK_CUT`, `ROCK_SHAPE`, `ROCK_SHADING`, `ROCK_CLUSTER`, `INSTANCED_SCATTER` |
+  | `formations.ts` | `STRATA_SHAPE`, `ROCK_MASS_SHAPE`, `RANDOM_BANDS`, and one recipe per formation: `BUTTE`, `PILLAR`, `MESA` |
+  | `minerals.ts` | `NODULE`, `GRAIN`, `OUTCROP`, `SAND_DRIFT`, and one recipe per deposit: `HEMATITE`, `GYPSUM`, `OLIVINE`, `SULFUR` |
 
   Feature and crater-kind odds are cumulative thresholds on a single roll.
+  Random spans in the asset tables are `[min, max]` pairs (`Range` in `noise.ts`),
+  drawn once per asset from its seed.
 - **Minerals:** visuals (`MINERAL_APPEARANCE`, factories in `minerals.ts`) are kept
   separate from distribution (`DEFAULT_MINERAL_RULES`). A map can pass its own
   `mineralRules` without touching the visuals.

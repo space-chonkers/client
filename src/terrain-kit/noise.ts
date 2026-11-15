@@ -1,5 +1,8 @@
 /** Deterministic randomness and small math helpers shared by every procedural asset. */
 
+/** Inclusive `[min, max]` bounds, spread into {@link Rng.range} or {@link Rng.int}. */
+export type Range = readonly [number, number]
+
 export interface Rng {
   /** Uniform float in [0, 1). */
   next(): number
