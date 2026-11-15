@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent }
 import type { ReliefMap, TerrainCell } from '../terrain-kit/reliefMap'
 import { ShowcaseStage, type CameraPreset, type RenderMode, type StageStats, type ViewMode } from './ShowcaseStage'
 import { reliefHex } from './terrainLayerView'
+import './showcase.css'
 
 /** Minimap backing-store pixels per cell; CSS scales the canvas to the panel width. */
 const MINIMAP_CELL_PX = 5
@@ -81,6 +82,10 @@ function ReliefMinimap({
   )
 }
 
+/**
+ * Development tool for the Layer −1 terrain kit (open with `?view=terrain-showcase`
+ * under `bun run dev`). Never shipped: `main.tsx` only loads it in dev builds.
+ */
 export default function TerrainShowcase() {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<ShowcaseStage | null>(null)

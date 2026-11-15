@@ -1,9 +1,9 @@
-import TerrainShowcase from './showcase/TerrainShowcase'
+import SpinningCube from './SpinningCube'
 
 export default function App() {
   return (
     <main className="game-client">
-      <TerrainShowcase />
+      <SpinningCube />
     </main>
   )
 }

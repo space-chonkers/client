@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { GridSpec } from './terrain'
+import type { GridSpec } from '../terrain-kit/terrain'
 
 export interface GridOverlayOptions {
   /** Height above the terrain, to keep lines from sinking into facets. */

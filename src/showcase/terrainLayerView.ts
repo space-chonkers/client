@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { painted } from '../terrain-kit/geometry'
-import { createGridOverlay } from '../terrain-kit/gridOverlay'
+import { createGridOverlay } from './gridOverlay'
 import { materials } from '../terrain-kit/palette'
 import { MINERAL_FEATURES, MAP_SIZE, cellAt, generateReliefMap } from '../terrain-kit/reliefMap'
 import { createReliefTerrain } from '../terrain-kit/reliefTerrain'
@@ -66,7 +66,9 @@ export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseCo
     return surface.heightAt(x, z)
   }
 
-  // Debug visuals are built on first use: most sessions never open them.
+  // Debug views for validating the generator: relief tint and data columns
+  // check relief values, the grid overlay checks cell alignment, labels show
+  // exact values. They are built on first use: most sessions never open them.
   let tint: { attribute: THREE.BufferAttribute; original: Float32Array; relief: Float32Array }[] | null = null
   let tinted = false
   let columns: THREE.InstancedMesh | null = null
