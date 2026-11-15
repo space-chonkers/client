@@ -1,0 +1,3 @@
+[submodule "vendor/jam-server"]
+	path = vendor/jam-server
+	url = https://github.com/space-chonkers/server
