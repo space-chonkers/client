@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { disposeObject } from './dispose'
+import type { ElevationModel } from './elevation'
 import { craterPolar } from './craters'
 import { createMesa, createRockPillar, createSedimentaryFormation } from './formations'
 import { bakeStaticMeshes } from './geometry'
@@ -7,6 +8,7 @@ import { MINERAL_APPEARANCE, createMineralDeposit } from './minerals'
 import { clamp, createNoise2D, createRng, fbm, hash, hash01, smoothstep } from './noise'
 import { PALETTE } from './palette'
 import { placeOnSurface, type PlacementOptions } from './placement'
+import { worldUnitsPerMeter } from './marsCoordinates'
 import { createReliefField } from './reliefField'
 import {
   MINERAL_FEATURES,
@@ -65,6 +67,14 @@ export interface ReliefTerrainOptions {
   chunkCells?: number
 }
 
+/** Real-elevation maps: the skirt reaches at least this far below the lowest measured point (world units). */
+const SKIRT_CLEARANCE = 0.3
+
+function lowestMeasuredHeight(elevation: ElevationModel, cellSize: number): number {
+  const lowest = elevation.samplesMeters.reduce((min, meters) => Math.min(min, meters), Infinity)
+  return (lowest - elevation.normalization.referenceMeters) * worldUnitsPerMeter(cellSize, elevation.cellSizeMeters)
+}
+
 export function createReliefTerrain({
   map,
   cellSize = 1,
@@ -74,7 +84,8 @@ export function createReliefTerrain({
 }: ReliefTerrainOptions): ReliefTerrain {
   const grid: GridSpec = { cols: map.cols, rows: map.rows, cellSize }
   const field = createReliefField(map, grid)
-  const { group: terrain, surface, chunks } = buildTerrain({ grid, field, seed: map.seed, subdivisions, skirtDepth, chunkCells })
+  const depth = map.elevation ? Math.max(skirtDepth, SKIRT_CLEARANCE - lowestMeasuredHeight(map.elevation, cellSize)) : skirtDepth
+  const { group: terrain, surface, chunks } = buildTerrain({ grid, field, seed: map.seed, subdivisions, skirtDepth: depth, chunkCells })
   const span = (chunkCells > 0 ? chunkCells : Math.max(map.cols, map.rows)) * cellSize
   const chunkKey = (x: number, z: number) =>
     `${Math.floor((x + (map.cols * cellSize) / 2) / span)},${Math.floor((z + (map.rows * cellSize) / 2) / span)}`
@@ -103,6 +114,7 @@ const SCATTER_DENSITY: Record<Geology, number> = {
   plateau: 0.02,
   ridge: 0.3,
   butte: 0.25,
+  unclassified: 0,
 }
 
 /** Small-rock scatter (world units unless noted). */
@@ -344,7 +356,8 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
 
   const dressing = bakeStaticMeshes(props, chunkKey)
   dressing.name = 'terrain-dressing'
-  const points = scatterPoints(map, grid, keepOut, talus)
+  // Unclassified maps (real elevation by default) get no procedural rocks at all, slope debris included.
+  const points = map.classification === 'procedural' ? scatterPoints(map, grid, keepOut, talus) : []
   // Pebbles get a faint contact shadow too, but only the larger ones are worth the tint.
   const { contactTint, restProbe } = ROCK_SCATTER
   for (const p of points) if (p.scale > contactTint.minScale) tints.push({ x: p.x, z: p.z, radius: p.scale * contactTint.radius, darken: contactTint.darken })

@@ -86,6 +86,12 @@ export const clamp = (value: number, min: number, max: number) => Math.min(max, 
 
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
+/** Value at quantile `p` (clamped to [0, 1]) of an ascending array, without interpolation. */
+export const quantile = (sorted: ArrayLike<number>, p: number) => sorted[Math.floor(clamp(p, 0, 1) * (sorted.length - 1))]
+
+/** Rounds to two decimals, the precision of stored relief values. */
+export const round2 = (value: number) => Math.round(value * 100) / 100
+
 /** Hermite step; edges may be given in descending order for a falling ramp. */
 export function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = clamp((x - edge0) / (edge1 - edge0), 0, 1)

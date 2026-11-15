@@ -3,7 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { painted } from '../terrain-kit/geometry'
 import { createGridOverlay } from './gridOverlay'
 import { materials } from '../terrain-kit/palette'
-import { MINERAL_FEATURES, MAP_SIZE, cellAt, generateReliefMap } from '../terrain-kit/reliefMap'
+import { MINERAL_FEATURES, cellAt, type ReliefMap } from '../terrain-kit/reliefMap'
 import { createReliefTerrain } from '../terrain-kit/reliefTerrain'
 import { cellCenter, type GridSpec } from '../terrain-kit/terrain'
 import type { DebugState, RenderMode, ShowcaseContent } from './types'
@@ -39,9 +39,8 @@ export function reliefColor(relief: number, target = new THREE.Color()): THREE.C
 
 export const reliefHex = (relief: number) => `#${reliefColor(relief).getHexString()}`
 
-/** The Layer −1 terrain system on the full map grid, with its debug views. */
-export function buildTerrainLayerView(seed: number, size = MAP_SIZE): ShowcaseContent {
-  const map = generateReliefMap(seed, size, size)
+/** The Layer −1 terrain for one map, from any source, with its debug views. */
+export function buildTerrainLayerView(map: ReliefMap): ShowcaseContent {
   const grid: GridSpec = { cols: map.cols, rows: map.rows, cellSize: CELL_SIZE }
   const terrain = createReliefTerrain({ map, cellSize: CELL_SIZE, skirtDepth: SKIRT_DEPTH })
   const { surface } = terrain

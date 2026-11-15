@@ -3,14 +3,17 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import { disposeObject } from '../terrain-kit/dispose'
 import { disposeSharedMaterials } from '../terrain-kit/palette'
-import type { ReliefMap } from '../terrain-kit/reliefMap'
+import { generateReliefMap, type ReliefMap } from '../terrain-kit/reliefMap'
 import { buildAssetGallery } from './assetGallery'
 import { buildTerrainLayerView } from './terrainLayerView'
 import type { CameraPreset, DebugState, ShowcaseContent, StageStats, ViewMode } from './types'
 
-/** One content builder per view; adding a view means adding an entry here. */
+/**
+ * One content builder per view; adding a view means adding an entry here.
+ * The stage picks the terrain source; the view renders whatever map it gets.
+ */
 const VIEW_BUILDERS: Record<ViewMode, (seed: number) => ShowcaseContent> = {
-  terrain: buildTerrainLayerView,
+  terrain: (seed) => buildTerrainLayerView(generateReliefMap(seed)),
   assets: buildAssetGallery,
 }
 
