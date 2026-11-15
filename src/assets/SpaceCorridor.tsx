@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-/** Dimensiones lógicas del mapa (50x50) según game_specs.md */
+/** Logical world grid dimensions (50x50) defined in the game specification. */
 export const MAP_GRID_WIDTH = 50
 export const MAP_GRID_HEIGHT = 50
 
 /**
- * Capas espaciales estrictas del mundo 3D:
- * -1: Terreno / Relieve
- *  0: Pasillos y estructuras de la base espacial
- *  1: Avatares de jugadores / entidades activas
+ * Strict 3D spatial layers:
+ * -1: Terrain and relief
+ *  0: Space base corridors and structures
+ *  1: Player avatars and active entities
  */
 export const SPATIAL_LAYERS = {
   TERRAIN: -1,
@@ -19,7 +19,7 @@ export const SPATIAL_LAYERS = {
 
 export type SpatialLayer = (typeof SPATIAL_LAYERS)[keyof typeof SPATIAL_LAYERS]
 
-/** Variantes de pasillo según cantidad de paredes laterales (0, 1, 2 o 3 paredes) */
+/** Corridor variants by lateral wall count (0, 1, 2, or 3 walls). */
 export type CorridorWallVariant = 0 | 1 | 2 | 3
 
 export type CardinalSide = 'north' | 'south' | 'east' | 'west'
@@ -45,7 +45,7 @@ export function gridToWorldPosition(
   )
 }
 
-/** Paleta Low-Poly accesible para Tritanopía */
+/** Low-poly Tritanopia-accessible color palette. */
 export const CORRIDOR_PALETTE = {
   background: '#101622',
   hull: '#e2e8f0',
@@ -56,14 +56,14 @@ export const CORRIDOR_PALETTE = {
 } as const
 
 export interface SpaceCorridorProps {
-  /** Lista de variantes de paredes (0, 1, 2, 3) a mostrar en fila */
+  /** List of wall-count variants (0, 1, 2, 3) rendered in a preview row. */
   variants?: CorridorWallVariant[]
 }
 
 /**
- * Capa 0: Construye únicamente el asset del pasillo SIN TECHO (open top-view),
- * conservando su piso metálico (base), 0, 1, 2 o 3 paredes laterales,
- * y trazando las líneas guía del piso solo hacia las salidas abiertas.
+ * Layer 0: Builds a roofless (open top-view) space corridor segment,
+ * preserving its metallic floor deck, 0, 1, 2, or 3 lateral walls,
+ * and drawing floor guide strips only toward open exits.
  */
 export function createCorridorSegment(
   wallCount: CorridorWallVariant = 2,
@@ -96,12 +96,12 @@ export function createCorridorSegment(
     flatShading: true,
   })
 
-  // 1. Piso metálico del pasillo (base propia de la estructura en Capa 0)
+  // 1. Metallic corridor floor deck (Layer 0 base structure)
   const floorDeck = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.08, 0.88), floorMat)
   floorDeck.position.set(0, 0.04, 0)
   segment.add(floorDeck)
 
-  // 2. Pilares de esquina bajos
+  // 2. Low corner structural pillars
   for (const sx of [-0.39, 0.39]) {
     for (const sz of [-0.39, 0.39]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 0.1), trimMat)
@@ -110,7 +110,7 @@ export function createCorridorSegment(
     }
   }
 
-  // 3. Determinar en qué lados hay pared según la variante (0, 1, 2 o 3 paredes)
+  // 3. Resolve closed wall sides for the given variant (0, 1, 2, or 3 walls)
   const walls = new Set<CardinalSide>()
   if (wallCount === 1) {
     walls.add('north')
@@ -160,7 +160,7 @@ export function createCorridorSegment(
 
   walls.forEach(addWall)
 
-  // 4. Líneas guía del piso: nodo central + brazos SOLO hacia las salidas abiertas
+  // 4. Floor guide lines: center node + arms extending only toward open exits
   const centerNode = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.18), stripMat)
   centerNode.position.set(0, 0.085, 0)
   segment.add(centerNode)
@@ -187,10 +187,11 @@ export function createCorridorSegment(
   return segment
 }
 
-/** Constructores individuales para las 4 variantes de pasillo en un solo archivo */
+/** Dedicated constructors for each corridor variant. */
 export const createCrossCorridor = () => createCorridorSegment(0)
 export const createTJunctionCorridor = () => createCorridorSegment(1)
 export const createStraightCorridorSegment = () => createCorridorSegment(2, false)
+export const createCornerCorridor = () => createCorridorSegment(2, true)
 export const createBorderCorridor = () => createCorridorSegment(3)
 
 export default function SpaceCorridor({
