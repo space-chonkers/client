@@ -8,7 +8,7 @@
 
 ### Scope
 
-Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene) with a "Back to home" button. The chosen mode is not used by the sandbox yet.
+Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: choosing **Solo** makes `App` mount `PlayerSandboxView` (the player test scene) with a "Back to home" button; choosing **Co-op** opens the crew waiting room (see [coop_lobby.md](./coop_lobby.md)). The chosen mode is not used by the sandbox yet.
 
 ## 1. Architecture
 
@@ -16,10 +16,10 @@ Includes the scene, the controllable character, the mode menu, the music control
 public/
 └── favicon.svg                 # Tab icon: the junior astronaut
 src/
-├── App.tsx                     # Selected mode state + app-wide music
+├── App.tsx                     # Screen state (home / co-op lobby / mission) + app-wide music
 ├── style.css                   # Global base styles + mission screen
 ├── ui/
-│   ├── theme.css               # JAM palette tokens and font (.home-screen, .mission-screen)
+│   ├── theme.css               # JAM palette tokens and font (.home-screen, .lobby-screen, .mission-screen)
 │   └── chunkyButton.css        # Shared .chunky-button / .chunky-button--icon
 ├── audio/
 │   ├── BackgroundMusic.ts      # Procedural music engine (Web Audio API)
@@ -27,10 +27,11 @@ src/
 └── home/
     ├── HomeScreen.tsx          # Screen composition (UI overlay)
     ├── HomeScreen.css          # Layout, logo and mode menu styles
-    ├── MarsHomeScene.tsx       # Renderer, camera, input and animation loop
+    ├── MarsHomeScene.tsx       # Renderer, camera, input and animation loop (also the lobby background)
+    ├── MarsHomeScene.css       # Full-bleed scene positioning
     ├── MusicVolumeControl.tsx  # Collapsible music button
     ├── MusicVolumeControl.css  # Music button and panel styles
-    ├── gameMode.ts             # GameMode type and menu options
+    ├── gameMode.ts             # GameMode type, COOP_MAX_PLAYERS and menu options
     └── scene/
         └── marsProps.ts        # Low-poly builders, palette and walkable tiles
 ```
