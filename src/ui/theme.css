@@ -4,6 +4,7 @@
  * on color alone (there is always text, an icon or a shape that tells them apart).
  */
 .home-screen,
+.lobby-screen,
 .mission-screen {
   --mars-sky: #f3cdb8;
   --mars-rust: #a94a2e;

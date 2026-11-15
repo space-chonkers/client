@@ -1,0 +1,9 @@
+/* Full-bleed Three.js scene behind a screen's UI overlay */
+.mars-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.mars-scene canvas {
+  display: block;
+}
