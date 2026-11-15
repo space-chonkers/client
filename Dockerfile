@@ -6,6 +6,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
+# Vite inlines these at build time: docker build --build-arg VITE_SERVER_URL=wss://...
+ARG VITE_SERVER_URL=
+ARG VITE_USE_MOCK=true
 RUN bun run build
 
 FROM nginx:alpine AS production

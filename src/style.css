@@ -31,3 +31,115 @@ body,
 .cube-scene canvas {
   display: block;
 }
+
+.game-client {
+  position: relative;
+}
+
+/* Economy HUD. Never rely on color alone (tritanopia): low state also has text + border. */
+.hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  width: min(440px, calc(100% - 24px));
+  padding: 12px;
+  border-radius: 10px;
+  background: rgb(16 19 26 / 85%);
+  color: #f2f2f2;
+  font-size: 13px;
+}
+
+.hud h2 {
+  margin: 10px 0 6px;
+  font-size: 14px;
+}
+
+.hud-pool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.hud-pool h2 {
+  width: 100%;
+  margin: 0;
+}
+
+.hud-pool.hud-low {
+  border-color: #ff6b6b;
+}
+
+.hud-money {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-status {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.hud-resources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-resources li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.hud-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3a3f4b;
+  font-weight: 700;
+}
+
+.hud-label {
+  width: 52px;
+}
+
+.hud-resources meter {
+  flex: 1;
+  min-width: 60px;
+}
+
+.hud-value,
+.hud-rate,
+.hud-worth {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hud-rate {
+  min-width: 40px;
+}
+
+.hud-worth {
+  min-width: 34px;
+  text-align: right;
+}
+
+.hud-warning {
+  color: #ff6b6b;
+  font-weight: 700;
+}
+
+.hud-resources button {
+  padding: 1px 6px;
+  font: inherit;
+}

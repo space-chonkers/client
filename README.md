@@ -14,7 +14,14 @@ bun run dev
 ```
 
 Vite prints the local URL (normally <http://localhost:5173>). Run the production
-build locally with `bun run build`.
+build locally with `bun run build`. Run the tests with `bun test`.
+
+Without `VITE_SERVER_URL` the client uses a mock server, so no backend is needed.
+See [`.env.example`](.env.example).
+
+## Docs
+
+- [Economy](docs/economy.md): shared stash, team pool, resource-to-money conversion and the server contract.
 
 ## Container
 
