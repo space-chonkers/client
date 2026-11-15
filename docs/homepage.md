@@ -22,6 +22,7 @@ src/
 │   ├── theme.css               # JAM palette tokens and font (.home-screen, .mission-screen)
 │   └── chunkyButton.css        # Shared .chunky-button / .chunky-button--icon
 ├── audio/
+│   ├── soundManager.ts         # Shared AudioContext, output chain and playTone helper
 │   ├── BackgroundMusic.ts      # Procedural music engine (Web Audio API)
 │   └── useBackgroundMusic.ts   # Hook: volume, mute and audio unlock
 └── home/
@@ -53,7 +54,8 @@ src/
 | `isMarsTileWalkable`          | Tile is on the flat plain and outside the base.                                                                                                                                                                                                                                                    |
 | `MusicVolumeControl`          | Round music-note button; clicking it expands the panel (mute / − / 10-level bar / + / percentage). `Escape` closes it.                                                                                                                                                                             |
 | `useBackgroundMusic`          | Returns `{ volume, isMuted, setVolume, toggleMute }`. Starts audio on the first `pointerdown`/`keydown`.                                                                                                                                                                                           |
-| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio with oscillators; `start`, `setVolume`, `dispose`. Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                                                                                      |
+| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio via `playTone`; `start`, `setVolume`, `dispose` (stops the scheduler and disconnects its output; the shared context stays open). Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                        |
+| `soundManager`                | Shared by all sounds: `getAudioContext()` (one lazy, auto-resumed `AudioContext` for the whole app), `createSoundOutput()` (`lowpass → gain → speakers`, one per sound for its own volume/off switch) and `playTone()` (oscillator with attack/decay envelope). New sounds should build on these helpers.                                                                                   |
 
 ## 3. Business Logic
 

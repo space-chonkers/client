@@ -3,9 +3,6 @@ import type { PoolResourceIconType } from '../../ui/icons/GameIcons'
 /** Code the server sends on a tick when no hazard is coming. */
 export const NO_HAZARD_CODE = 0
 
-/** Non-zero hazard codes sent by the server on each tick. */
-export type HazardCode = 1 | 2 | 3 | 4
-
 export type HazardType = 'solarStorm' | 'waterLeak' | 'oxygenLoss' | 'rottenFood'
 
 export interface HazardDefinition {
@@ -18,7 +15,8 @@ export interface HazardDefinition {
   icon: PoolResourceIconType
 }
 
-export const HAZARDS_BY_CODE: Readonly<Record<HazardCode, HazardDefinition>> = {
+/** Hazards keyed by the non-zero code the server sends on each tick. */
+const HAZARDS_BY_CODE: Readonly<Record<number, HazardDefinition>> = {
   1: {
     type: 'solarStorm',
     title: 'Solar Storm',
@@ -45,13 +43,9 @@ export const HAZARDS_BY_CODE: Readonly<Record<HazardCode, HazardDefinition>> = {
   },
 }
 
-export const HAZARD_CODES: readonly HazardCode[] = [1, 2, 3, 4]
-
-function isHazardCode(code: number): code is HazardCode {
-  return HAZARD_CODES.includes(code as HazardCode)
-}
+export const HAZARD_CODES: readonly number[] = Object.keys(HAZARDS_BY_CODE).map(Number)
 
 /** Returns the hazard for a server code, or `null` for 0 and unknown codes. */
 export function getHazardByCode(code: number): HazardDefinition | null {
-  return isHazardCode(code) ? HAZARDS_BY_CODE[code] : null
+  return HAZARDS_BY_CODE[code] ?? null
 }

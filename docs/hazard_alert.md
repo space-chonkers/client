@@ -37,7 +37,7 @@ src/
 
 - `hazardEvents.ts` is the single source of truth for codes and texts.
 - `useHazardAlert` holds the hazard state; the UI components are purely presentational.
-- `AlarmSound` follows the same pattern as `BackgroundMusic`: lazy `AudioContext`, `dispose()` on unmount.
+- `AlarmSound` builds on `audio/soundManager.ts` like `BackgroundMusic`: it plays through the shared `AudioContext`, and `useHazardAlert` calls `stop()` on unmount.
 
 ## 3. Implementation Details
 
@@ -47,7 +47,7 @@ src/
 | `useHazardAlert()` | Returns `{ warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }`. Both hazards are a `HazardDefinition` or `null`. |
 | `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon badge, title, description and X button. |
 | `HazardOngoingLabel` | Prop `hazard`. Top-right pill: icon + "<Hazard> in progress". |
-| `AlarmSound` | `play()` (siren: 6 low-passed square beeps alternating 880 / 660 Hz, ~1.5 s), `stop()`, `dispose()`. |
+| `AlarmSound` | `play()` (siren: 6 low-passed square beeps alternating 880 / 660 Hz, ~1.5 s), `stop()`. |
 
 ## 4. Business Logic
 
@@ -90,3 +90,4 @@ bun run build   # TypeScript check + production build
 | 2026-11-15 | 1.1.0 | X button + compact countdown, countdown removed from the full banner, final alarm at 3 s, "in progress" label |
 | 2026-11-15 | 1.2.0 | Removed "Warning · Incoming hazard" label, siren alarm, 10 s countdown, alarm only when the banner first appears |
 | 2026-11-15 | 1.3.0 | Removed the countdown, progress bar and compact view; closing the banner shows the "in progress" label |
+| 2026-11-15 | 1.4.0 | `AlarmSound` uses the shared `soundManager`; `dispose()` removed in favor of `stop()` |

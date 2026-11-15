@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlarmSound } from '../../audio/AlarmSound'
 import { getHazardByCode, NO_HAZARD_CODE, type HazardDefinition } from './hazardEvents'
 
@@ -24,18 +24,11 @@ export interface HazardAlertControls {
  * Only the warning and its status are handled here; the hazard's effects are not.
  */
 export function useHazardAlert(): HazardAlertControls {
-  const alarmRef = useRef<AlarmSound | null>(null)
+  const [alarm] = useState(() => new AlarmSound())
   const [warningHazard, setWarningHazard] = useState<HazardDefinition | null>(null)
   const [ongoingHazard, setOngoingHazard] = useState<HazardDefinition | null>(null)
 
-  useEffect(() => {
-    const alarm = new AlarmSound()
-    alarmRef.current = alarm
-    return () => {
-      alarm.dispose()
-      alarmRef.current = null
-    }
-  }, [])
+  useEffect(() => () => alarm.stop(), [alarm])
 
   const receiveHazardCode = useCallback(
     (code: number) => {
@@ -53,17 +46,17 @@ export function useHazardAlert(): HazardAlertControls {
       if (ongoingHazard?.type === hazard.type) return
 
       setWarningHazard(hazard)
-      alarmRef.current?.play()
+      alarm.play()
     },
-    [warningHazard, ongoingHazard],
+    [alarm, warningHazard, ongoingHazard],
   )
 
   const closeWarning = useCallback(() => {
     if (!warningHazard) return
     setOngoingHazard(warningHazard)
     setWarningHazard(null)
-    alarmRef.current?.stop()
-  }, [warningHazard])
+    alarm.stop()
+  }, [alarm, warningHazard])
 
   const resolveOngoingHazard = useCallback(() => {
     setOngoingHazard(null)
@@ -72,8 +65,8 @@ export function useHazardAlert(): HazardAlertControls {
   const dismiss = useCallback(() => {
     setWarningHazard(null)
     setOngoingHazard(null)
-    alarmRef.current?.stop()
-  }, [])
+    alarm.stop()
+  }, [alarm])
 
   return { warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }
 }
