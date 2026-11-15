@@ -17,19 +17,26 @@ public/
 └── favicon.svg                 # Tab icon: the junior astronaut
 src/
 ├── App.tsx                     # Selected mode state + app-wide music
+├── style.css                   # Global base styles + mission screen
+├── ui/
+│   ├── theme.css               # JAM palette tokens and font (.home-screen, .mission-screen)
+│   └── chunkyButton.css        # Shared .chunky-button / .chunky-button--icon
 ├── audio/
 │   ├── BackgroundMusic.ts      # Procedural music engine (Web Audio API)
 │   └── useBackgroundMusic.ts   # Hook: volume, mute and audio unlock
 └── home/
     ├── HomeScreen.tsx          # Screen composition (UI overlay)
+    ├── HomeScreen.css          # Layout, logo and mode menu styles
     ├── MarsHomeScene.tsx       # Renderer, camera, input and animation loop
     ├── MusicVolumeControl.tsx  # Collapsible music button
+    ├── MusicVolumeControl.css  # Music button and panel styles
     ├── gameMode.ts             # GameMode type and menu options
     └── scene/
         └── marsProps.ts        # Low-poly builders, palette and walkable tiles
 ```
 
 - `useBackgroundMusic` is used in `App` so the music keeps playing across screens.
+- Each component imports its own stylesheet. Components that customize `.chunky-button` import `ui/chunkyButton.css` before their own CSS so their rules win the cascade (e.g. the 48px round music toggle over the 40px `--icon` default).
 - `marsProps.ts` reuses `createCrossCorridor` and `createStraightCorridorSegment` from `src/assets/SpaceCorridor.tsx` for the base.
 - The controllable astronaut is the shared game player: `Player` and `AstronautModel` from `src/game/player/` and `InputController` from `src/game/input/`. The homepage has no movement code of its own.
 - Terrain, base and characters share one grid with tile centers on integer coordinates.
@@ -46,7 +53,7 @@ src/
 | `isMarsTileWalkable`          | Tile is on the flat plain and outside the base.                                                                                                                                                                                                                                                    |
 | `MusicVolumeControl`          | Round music-note button; clicking it expands the panel (mute / − / 10-level bar / + / percentage). `Escape` closes it.                                                                                                                                                                             |
 | `useBackgroundMusic`          | Returns `{ volume, isMuted, setVolume, toggleMute }`. Starts audio on the first `pointerdown`/`keydown`.                                                                                                                                                                                           |
-| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio with oscillators; `start`, `setVolume`, `dispose`.                                                                                                                                                                                                      |
+| `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio with oscillators; `start`, `setVolume`, `dispose`. Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                                                                                      |
 
 ## 3. Business Logic
 

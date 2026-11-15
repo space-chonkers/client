@@ -1,12 +1,14 @@
 import { useState, type KeyboardEvent } from 'react'
 import { MUSIC_VOLUME_STEP, type BackgroundMusicControls } from '../audio/useBackgroundMusic'
+import '../ui/chunkyButton.css'
+import './MusicVolumeControl.css'
 
 const VOLUME_LEVEL_COUNT = 10
 const MUSIC_PANEL_ID = 'music-control-panel'
 
 function MusicNoteIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M9 17V5l11-2v12" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinejoin="round" />
       <circle cx="6.5" cy="17.5" r="3" fill="currentColor" />
       <circle cx="17.5" cy="15.5" r="3" fill="currentColor" />
@@ -16,7 +18,7 @@ function MusicNoteIcon() {
 
 function SpeakerIcon({ isMuted }: { isMuted: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
       {isMuted ? (
         <path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />

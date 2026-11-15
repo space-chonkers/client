@@ -3,6 +3,8 @@ import { useBackgroundMusic } from './audio/useBackgroundMusic'
 import HomeScreen from './home/HomeScreen'
 import type { GameMode } from './home/gameMode'
 import PlayerSandboxView from './PlayerSandboxView'
+import './ui/theme.css'
+import './ui/chunkyButton.css'
 
 /** Shows the homepage until a game mode is picked, then the player sandbox. */
 export default function App() {

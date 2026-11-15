@@ -2,6 +2,9 @@ import type { BackgroundMusicControls } from '../audio/useBackgroundMusic'
 import MarsHomeScene from './MarsHomeScene'
 import MusicVolumeControl from './MusicVolumeControl'
 import { GAME_MODE_OPTIONS, type GameMode } from './gameMode'
+import '../ui/theme.css'
+import '../ui/chunkyButton.css'
+import './HomeScreen.css'
 
 /** Referenced by `.home-title__logo` in style.css as url(#jam-logo-sticker-outline). */
 const STICKER_OUTLINE_FILTER_ID = 'jam-logo-sticker-outline'

@@ -110,12 +110,29 @@ export class BackgroundMusic {
   private scheduleAhead(): void {
     if (!this.context) return
 
-    const horizon = this.context.currentTime + SCHEDULE_LOOKAHEAD_SECONDS
+    const currentTime = this.context.currentTime
+    this.skipMissedSteps(currentTime)
+
+    const horizon = currentTime + SCHEDULE_LOOKAHEAD_SECONDS
     while (this.nextStepTime < horizon) {
       this.scheduleStep(this.stepIndex, this.nextStepTime)
       this.nextStepTime += STEP_DURATION_SECONDS
       this.stepIndex += 1
     }
+  }
+
+  /**
+   * Browsers throttle timers in background tabs, so the scheduler can fall
+   * behind the audio clock. Steps whose start time already passed are skipped
+   * instead of scheduled in the past, which would make them all play at once.
+   * The step index still advances so the chord progression stays in phase.
+   */
+  private skipMissedSteps(currentTime: number): void {
+    if (this.nextStepTime >= currentTime) return
+
+    const missedSteps = Math.ceil((currentTime - this.nextStepTime) / STEP_DURATION_SECONDS)
+    this.nextStepTime += missedSteps * STEP_DURATION_SECONDS
+    this.stepIndex += missedSteps
   }
 
   private scheduleStep(stepIndex: number, startTime: number): void {

@@ -1,0 +1,62 @@
+/*
+ * Chunky, toy-like buttons with depth. Uses the tokens from theme.css.
+ * Import this before any component stylesheet that customizes these buttons,
+ * so the component rules win the cascade.
+ */
+.chunky-button {
+  position: relative;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  padding: 10px 18px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 var(--button-depth) 0 var(--ink);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.chunky-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 calc(var(--button-depth) + 2px) 0 var(--ink);
+}
+
+.chunky-button:active:not(:disabled) {
+  transform: translateY(var(--button-depth));
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.chunky-button:focus-visible {
+  outline: 4px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.chunky-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chunky-button--icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 1.4rem;
+  line-height: 1;
+  --button-depth: 4px;
+}
+
+/* Icons follow the button's font size so they scale with user text/zoom settings */
+.chunky-button--icon .icon {
+  width: 1em;
+  height: 1em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chunky-button {
+    transition: none;
+  }
+}
