@@ -1,0 +1,54 @@
+/* Top-left HUD panel for the shared resource indicators. */
+
+.resource-bar-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.resource-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  padding: 12px 14px;
+  background: rgba(16, 22, 34, 0.88);
+  border: 1px solid #334155;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.resource-bar__row {
+  display: grid;
+  grid-template-columns: auto 1fr 32px;
+  align-items: center;
+  gap: 10px;
+}
+
+.resource-bar__track {
+  width: 100%;
+  height: 10px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.resource-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 180ms ease-out;
+}
+
+.resource-bar__value {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #f8fafc;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
