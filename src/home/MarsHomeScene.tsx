@@ -13,6 +13,7 @@ import {
   isMarsTileWalkable,
   type GridPosition,
 } from './scene/marsProps'
+import './MarsHomeScene.css'
 
 /** Half of the orthographic camera's visible height, in world units. */
 const CAMERA_VIEW_HALF_HEIGHT = 6.5
