@@ -56,7 +56,7 @@ export interface MarsMapLayerOptions {
 ## 4. Business Logic
 
 ### Coordinate Alignment & Grounding
-- Procedural fallback maps are generated at `70×70` (`MAP_SIZE + 2 * 10` border cells) so map edges stay outside the camera view while gameplay remains constrained to the central `50×50` grid.
+- Procedural fallback maps are generated at `75×75` (a non-playable outer margin around the `50×50` grid) so map edges stay outside the camera view while gameplay remains constrained to the central `50×50` grid.
 - Before meshing, `prepareInitialBaseTerrain` levels the initial `3×3` base cells to their average relief and clears `feature` to `'none'` so rocks or formations never spawn inside the starting base.
 - `MarsMapLayer` offsets `terrain.root` in X/Z so every `(cellX, cellY)` in `0..49` matches its terrain cell 1:1, and sets `terrain.root.position.y = -avgBaseHeight - 0.02` using the average `surface.heightAt` of the initial `3×3` base.
 - `CorridorGrid` adds a shared `0.85`-unit foundation plinth underneath each placed tile (`y = 0` down to `-0.85`) so newly built corridors stay visually grounded over craters and terrain dips without regenerating terrain chunks.
