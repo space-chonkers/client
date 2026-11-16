@@ -34,13 +34,14 @@ src/
     ├── MusicVolumeControl.css  # Music button and panel styles
     ├── gameMode.ts             # GameMode type, COOP_MAX_PLAYERS and menu options
     └── scene/
-        └── marsProps.ts        # Low-poly builders, palette and walkable tiles
+        └── marsProps.ts        # Low-poly base/rover builders, palette, walkable and flat-zone tiles
 ```
 
 - `useBackgroundMusic` is used in `App` so the music keeps playing across screens.
 - Each component imports its own stylesheet. Components that customize `.chunky-button` import `ui/chunkyButton.css` before their own CSS so their rules win the cascade (e.g. the 48px round music toggle over the 40px `--icon` default).
 - `marsProps.ts` reuses `createCrossCorridor` and `createStraightCorridorSegment` from `src/assets/SpaceCorridor.tsx` for the base.
 - The controllable astronaut is the shared game player: `Player` and `AstronautModel` from `src/game/player/` and `InputController` from `src/game/input/`. The homepage has no movement code of its own.
+- The ground is the game's realistic terrain: `MarsMapLayer` from `src/game/map/` (see `docs/map_integration.md`), the same seeded map as the player sandbox. `MarsHomeScene` centers it on map cell `(25, 25)` and passes the cells from `getFlatZoneTiles()` as `initialBaseCells`, so they are leveled flat and cleared of rocks, formations and dunes.
 - Terrain, base and characters share one grid with tile centers on integer coordinates.
 
 ## 2. Implementation Details
@@ -52,7 +53,8 @@ src/
 | `Player` (shared, unmodified) | Continuous 4-direction movement with acceleration, turning and a procedural walk/idle animation. The homepage passes its own `HOME_PLAYER_TUNING`.                                                                                                                                                 |
 | `canPlayerStandAt`            | Every corner of the player's footprint (`PLAYER_FOOTPRINT_HALF_SIZE`) must be on a walkable tile that the companion doesn't occupy.                                                                                                                                                                |
 | `keepPlayerOnFreeGround`      | Runs after each `Player.update`: if the new position is blocked, undoes the move on one axis (slide) or both.                                                                                                                                                                                      |
-| `isMarsTileWalkable`          | Tile is on the flat plain and outside the base.                                                                                                                                                                                                                                                    |
+| `isMarsTileWalkable`          | Tile is on the flat plain (within `FLAT_ZONE_RADIUS` = 5.5 of the center) and outside the base.                                                                                                                                                                                                    |
+| `getFlatZoneTiles`            | Tiles within `FLAT_ZONE_RADIUS + 2` of the center. The 2-cell padding is needed because the terrain height is interpolated from the two nearest cells on each side; without it, the slopes outside would bend the ground inside the circle.                                                     |
 | `MusicVolumeControl`          | Round music-note button; clicking it expands the panel (mute / − / 10-level bar / + / percentage). `Escape` closes it.                                                                                                                                                                             |
 | `useBackgroundMusic`          | Returns `{ volume, isMuted, setVolume, toggleMute }`. Starts audio on the first `pointerdown`/`keydown`.                                                                                                                                                                                           |
 | `BackgroundMusic`             | Generates a pad (Am–F–C–G) and an arpeggio via `playTone`; `start`, `setVolume`, `dispose` (stops the scheduler and disconnects its output; the shared context stays open). Steps missed while the tab was throttled are skipped, not played at once.                                                                                                                                        |
@@ -65,7 +67,8 @@ src/
 - **Keyboard:** WASD or arrow keys. The character walks while a key is held and slows to a stop when it is released. With several keys held, the last one pressed wins (no diagonals).
 - Clicking or tapping the map does not move the character.
 - Standing still, it plays the shared model's breathing idle.
-- It cannot leave the flat plain, enter the base or step onto the jumping companion's tile. When it hits an obstacle it slides along it instead of stopping. The rover is decorative and does not collide.
+- It cannot leave the flat circular plain, enter the base or step onto the jumping companion's tile. The realistic relief around the circle is scenery only.
+- The terrain extends 35 units from the center (the 50×50 map plus its 10-cell border), well beyond the orthographic view on any aspect ratio, so no empty background shows at the screen corners. When it hits an obstacle it slides along it instead of stopping. The rover is decorative and does not collide.
 - Collision lives in the homepage, not in `Player`. `Player` keeps its velocity while blocked, so the character keeps its walk animation while pushing against an obstacle.
 - Both astronauts use `AstronautModel` scaled by `HOME_ASTRONAUT_SCALE` (0.45) so they fit the 1-unit tiles. The stride rate is divided by the same scale so the steps match the shorter legs.
 

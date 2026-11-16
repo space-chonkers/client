@@ -66,8 +66,12 @@ const REAL_TERRAIN_APRON = { size: 240, color: '#5a4a45', gapBelowSkirt: 0.01 }
 /**
  * Levels the initial base cells to their average relief and removes decorative
  * features so rocks or formations never spawn inside the starting 3x3 base.
- * Procedural maps only: real maps draw measured metres (not relief) and carry
- * no features, so their base is levelled on the rendered mesh by `mineCell`.
+ * On procedural maps the cells also become `plain` ground in the `plains`
+ * region, because dunes, rubble and volcanic flow fronts add micro-relief on
+ * top of the relief (up to 0.3 units for dunes) that would break the flat area.
+ * Real maps draw measured metres, not relief, so levelling their relief only
+ * affects colour and shading; their ground is levelled on the rendered mesh by
+ * `mineCell`.
  */
 function prepareInitialBaseTerrain(
   map: ReliefMap,
@@ -94,9 +98,12 @@ function prepareInitialBaseTerrain(
   if (indices.size === 0) return map
   const avgRelief = reliefSum / indices.size
 
-  const cells: TerrainCell[] = map.cells.map((cell, index) =>
-    indices.has(index) ? { ...cell, relief: avgRelief, feature: 'none' } : cell,
-  )
+  const levelGround = map.classification === 'procedural'
+  const cells: TerrainCell[] = map.cells.map((cell, index) => {
+    if (!indices.has(index)) return cell
+    const leveled: TerrainCell = { ...cell, relief: avgRelief, feature: 'none' }
+    return levelGround ? { ...leveled, geology: 'plain', region: 'plains' } : leveled
+  })
 
   return { ...map, cells }
 }
