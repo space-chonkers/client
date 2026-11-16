@@ -123,3 +123,4 @@ bun run build
 | Date | Version | Description |
 |---|---|---|
 | 2026-11-15 | 1.0.0 | Integrated 50×50 Layer -1 Mars terrain into `PlayerSandbox` |
+| 2026-11-15 | 1.1.0 | Leveled cells become plain ground; homepage uses `MarsMapLayer` as its background |

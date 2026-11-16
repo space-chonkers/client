@@ -36,6 +36,9 @@ const GROUND_CLEARANCE = 0.02
 /**
  * Levels the initial base cells to their average relief and removes decorative
  * features so rocks or formations never spawn inside the starting 3x3 base.
+ * On procedural maps the cells also become `plain` ground in the `plains`
+ * region, because dunes, rubble and volcanic flow fronts add micro-relief on
+ * top of the relief (up to 0.3 units for dunes) that would break the flat area.
  */
 function prepareInitialBaseTerrain(
   map: ReliefMap,
@@ -62,9 +65,12 @@ function prepareInitialBaseTerrain(
   if (indices.size === 0) return map
   const avgRelief = reliefSum / indices.size
 
-  const cells: TerrainCell[] = map.cells.map((cell, index) =>
-    indices.has(index) ? { ...cell, relief: avgRelief, feature: 'none' } : cell,
-  )
+  const levelGround = map.classification === 'procedural'
+  const cells: TerrainCell[] = map.cells.map((cell, index) => {
+    if (!indices.has(index)) return cell
+    const leveled: TerrainCell = { ...cell, relief: avgRelief, feature: 'none' }
+    return levelGround ? { ...leveled, geology: 'plain', region: 'plains' } : leveled
+  })
 
   return { ...map, cells }
 }
