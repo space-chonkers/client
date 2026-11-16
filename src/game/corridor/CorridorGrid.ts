@@ -41,6 +41,8 @@ export const WALL_COLLISION_OFFSET = 0.12
 const STASH_COLLISION_HALF = 0.46
 /** Speed at which the player slides around a corner pillar into an open doorway. */
 const CORNER_SLIDE_SPEED = 3.2
+/** Downward foundation skirt height so corridors stay grounded over craters and dips. */
+const PLINTH_HEIGHT = 0.85
 
 const NEIGHBOR_OFFSETS: ReadonlyArray<{
   side: CardinalSide
@@ -153,6 +155,13 @@ export class CorridorGrid {
   readonly object = new THREE.Group()
   private readonly tiles = new Map<string, StoredTile>()
   private readonly occupancyListeners = new Set<() => void>()
+  private readonly plinths = new Map<string, THREE.Mesh>()
+  private readonly plinthGeo = new THREE.BoxGeometry(0.96, PLINTH_HEIGHT, 0.96)
+  private readonly plinthMat = new THREE.MeshStandardMaterial({
+    color: '#2b3446',
+    roughness: 0.75,
+    metalness: 0.25,
+  })
 
   constructor() {
     this.object.name = 'CorridorGrid'
@@ -237,6 +246,12 @@ export class CorridorGrid {
     this.object.remove(existing.group)
     disposeGroup(existing.group)
     this.tiles.delete(key)
+
+    const plinth = this.plinths.get(key)
+    if (plinth) {
+      this.object.remove(plinth)
+      this.plinths.delete(key)
+    }
 
     for (const { dx, dz } of NEIGHBOR_OFFSETS) {
       this.rebuildTileMesh(x + dx, z + dz)
@@ -352,12 +367,18 @@ export class CorridorGrid {
       this.object.remove(tile.group)
       disposeGroup(tile.group)
     }
+    for (const plinth of this.plinths.values()) {
+      this.object.remove(plinth)
+    }
     this.tiles.clear()
     this.occupancyListeners.clear()
   }
 
   private notifyOccupancyChange(): void {
     for (const listener of this.occupancyListeners) listener()
+    this.plinths.clear()
+    this.plinthGeo.dispose()
+    this.plinthMat.dispose()
   }
 
   private refreshTileAndNeighbors(x: number, z: number): void {
@@ -400,5 +421,14 @@ export class CorridorGrid {
 
     this.tiles.set(key, { kind: existing.kind, group: segment })
     this.object.add(segment)
+
+    if (!this.plinths.has(key)) {
+      const plinth = new THREE.Mesh(this.plinthGeo, this.plinthMat)
+      plinth.position.set(x, -PLINTH_HEIGHT / 2, z)
+      plinth.castShadow = true
+      plinth.receiveShadow = true
+      this.plinths.set(key, plinth)
+      this.object.add(plinth)
+    }
   }
 }

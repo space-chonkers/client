@@ -1,8 +1,8 @@
 /*
- * Hazard warning banner. Uses the JAM tokens from theme.css (cream panel, ink
- * border and hard ink shadow like the chunky buttons). The top strip and the
- * icon ring take the hazard's icon color (`--hazard-accent`, set inline from
- * ICON_COLORS).
+ * Hazard warning banner. Shares the HUD panel tokens (`--hud-panel-*`,
+ * theme.css) with the resource bar, action buttons and "in progress" label.
+ * The top strip and the title take the hazard's icon color (`--hazard-accent`,
+ * set inline from ICON_COLORS).
  */
 .hazard-alert-overlay {
   position: absolute;
@@ -20,19 +20,19 @@
 
 .hazard-alert {
   overflow: hidden;
-  border: 3px solid var(--ink);
-  border-radius: 20px;
-  background: var(--cream);
-  color: var(--ink);
-  box-shadow: 0 6px 0 var(--ink);
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-panel-border);
+  border-radius: var(--hud-panel-radius);
+  box-shadow: var(--hud-panel-shadow);
+  backdrop-filter: var(--hud-panel-blur);
+  color: var(--hud-text);
   pointer-events: auto;
   animation: hazard-alert-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Solid accent strip across the top */
+/* Thin accent strip across the top */
 .hazard-alert__top-strip {
-  height: 14px;
-  border-bottom: 3px solid var(--ink);
+  height: 4px;
   background: var(--hazard-accent, var(--coral));
 }
 
@@ -40,21 +40,12 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: var(--hud-panel-padding);
 }
 
-/* Dark badge so the resource icon keeps the contrast it has in the HUD */
 .hazard-alert__icon {
-  display: grid;
-  place-items: center;
-  /* Leaves breathing room between the 30px icon and the accent ring */
-  width: 60px;
-  height: 60px;
-  border: 3px solid var(--ink);
-  border-radius: 50%;
-  background: var(--ink);
-  box-shadow: inset 0 0 0 3px var(--hazard-accent, var(--coral));
+  display: flex;
   animation: hazard-icon-wobble 1.4s ease-in-out infinite;
 }
 
@@ -64,25 +55,52 @@
 
 .hazard-alert__title {
   margin: 0;
-  font-family: 'Fredoka', 'Nunito', sans-serif;
-  font-size: clamp(1.4rem, 4.5vw, 2rem);
-  font-weight: 700;
-  line-height: 1.05;
+  color: var(--hazard-accent, var(--hud-text));
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .hazard-alert__description {
   margin: 4px 0 0;
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
-/* X button: sits at the top of the row, smaller than the default icon button */
+/* Flat X button, same hover/press highlight as the action button rows */
 .hazard-alert__close {
+  display: grid;
+  place-items: center;
   align-self: start;
-  width: 32px;
-  height: 32px;
-  font-size: 1rem;
-  --button-depth: 3px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--hud-text);
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.hazard-alert__close .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.hazard-alert__close:hover {
+  background: rgba(248, 250, 252, 0.08);
+}
+
+.hazard-alert__close:active {
+  background: rgba(248, 250, 252, 0.14);
+}
+
+.hazard-alert__close:focus-visible {
+  outline: 2px solid var(--hud-text);
+  outline-offset: 2px;
 }
 
 @keyframes hazard-alert-in {
@@ -102,7 +120,7 @@
   }
 }
 
-/* The resource bar and the back button sit at the top on small screens */
+/* The resource bar and the "in progress" label sit at the top on small screens */
 @media (max-width: 900px) {
   .hazard-alert-overlay {
     top: auto;
@@ -114,7 +132,6 @@
 @media (max-width: 480px) {
   .hazard-alert__body {
     gap: 10px;
-    padding: 10px 12px;
   }
 
   .hazard-alert__description {
@@ -126,5 +143,9 @@
   .hazard-alert,
   .hazard-alert__icon {
     animation: none;
+  }
+
+  .hazard-alert__close {
+    transition: none;
   }
 }

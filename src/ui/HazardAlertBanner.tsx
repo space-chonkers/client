@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react'
 import type { HazardDefinition } from '../game/hazards/hazardEvents'
 import { GameIcon, ICON_COLORS } from './icons/GameIcons'
-import './chunkyButton.css'
 import './hazardAlertBanner.css'
 
-const BANNER_ICON_SIZE = 30
+/** Larger than the 28 px HUD icons so the warning stands out. */
+const BANNER_ICON_SIZE = 40
 
 export interface HazardAlertBannerProps {
   hazard: HazardDefinition
@@ -45,7 +45,7 @@ export default function HazardAlertBanner({ hazard, onClose }: HazardAlertBanner
 
           <button
             type="button"
-            className="chunky-button chunky-button--icon hazard-alert__close"
+            className="hazard-alert__close"
             onClick={onClose}
             aria-label={`Close ${hazard.title} warning`}
           >

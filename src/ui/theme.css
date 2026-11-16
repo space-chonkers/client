@@ -18,6 +18,15 @@
   --teal-dark: #0a5f61;
   --button-depth: 6px;
 
+  /* Shared look of the in-mission HUD panels (resource bar, action buttons, hazard label). */
+  --hud-panel-bg: rgba(16, 22, 34, 0.6);
+  --hud-panel-blur: blur(3px);
+  --hud-panel-border: #334155;
+  --hud-panel-radius: 14px;
+  --hud-panel-padding: 12px 14px;
+  --hud-panel-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --hud-text: #f8fafc;
+
   font-family: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
   color: var(--ink);
   background: var(--mars-sky);
