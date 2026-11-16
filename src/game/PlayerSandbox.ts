@@ -211,7 +211,8 @@ export class PlayerSandbox {
   private publishPlayerThrottled(delta: number): void {
     this.playerPublishTimer += delta
     if (this.playerPublishTimer < PLAYER_PUBLISH_INTERVAL) return
-    this.playerPublishTimer = 0
+    // Carry the overshoot so the average rate stays at 1 / PLAYER_PUBLISH_INTERVAL.
+    this.playerPublishTimer -= PLAYER_PUBLISH_INTERVAL
     this.publishPlayer()
   }
 

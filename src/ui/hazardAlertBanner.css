@@ -9,7 +9,11 @@
   top: 16px;
   left: 50%;
   z-index: 20;
-  width: min(560px, calc(100% - 32px));
+  /*
+   * Fits between the HUD side panels: 272px per side = 16px gutter + 240px
+   * mission minimap + 16px gap (the 220px ResourceBar on the left is narrower).
+   */
+  width: min(560px, calc(100% - 2 * 272px));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -121,6 +125,7 @@
   .hazard-alert-overlay {
     top: auto;
     bottom: 16px;
+    width: min(560px, calc(100% - 32px));
   }
 }
 

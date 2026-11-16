@@ -20,3 +20,14 @@
   gap: 12px;
   pointer-events: none;
 }
+
+/*
+ * Narrow phones (under 268px + the minimap's 120px minimum): no room beside the
+ * ResourceBar, so the column starts under it. 214px = 16px gutter + 198px
+ * ResourceBar height (5 rows); plus a 12px gap.
+ */
+@media (max-width: 387px) {
+  .player-sandbox__top-right {
+    top: calc(214px + 12px);
+  }
+}

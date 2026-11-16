@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { INITIAL_SERVER_PAYLOAD } from '../../src/game/corridor/mockServerPayload'
 import type { MissionMapConstruction, MissionMapPlayer } from '../../src/game/minimap/missionMap'
+import { PlayerSnapshotStore } from '../../src/game/minimap/PlayerSnapshotStore'
 import { MissionMinimap, type MissionMinimapProps } from '../../src/ui/MissionMinimap'
 
 const initialBase: MissionMapConstruction[] = INITIAL_SERVER_PAYLOAD.constructions.map(({ kind, cellX, cellY }) => ({
@@ -16,10 +17,16 @@ function render(overrides: Partial<MissionMinimapProps> = {}): string {
       grid={INITIAL_SERVER_PAYLOAD.grid}
       constructions={initialBase}
       investigation={INITIAL_SERVER_PAYLOAD.investigation}
-      player={null}
       {...overrides}
     />,
   )
+}
+
+/** A store already holding `player`, as PlayerSandboxView provides after the first update. */
+function playerSource(player: MissionMapPlayer | null): PlayerSnapshotStore {
+  const store = new PlayerSnapshotStore()
+  store.set(player)
+  return store
 }
 
 function count(markup: string, className: string): number {
@@ -67,28 +74,41 @@ describe('MissionMinimap', () => {
     expect(count(markup, 'mission-minimap__site mission-minimap__site--completed')).toBe(1)
     expect(markup).toContain('class="mission-minimap__site-check"')
     expect(markup).toContain('mission-minimap__progress-count">1 / 10<')
-    expect(markup).toContain('aria-valuenow="1"')
+    expect(markup).toContain('aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"')
+    expect(markup).toContain('aria-valuetext="1 of 10 sites completed"')
     expect(markup).toContain('style="width:10%"')
   })
 
   test('places the player at its continuous position, rotated to its facing', () => {
     const player: MissionMapPlayer = { cellX: 29.25, cellY: 23.5, facing: 'right' }
-    const markup = render({ player })
+    const markup = render({ player: playerSource(player) })
     expect(markup).toContain('transform:translate(29.75px, 24px)')
     expect(markup).toContain('transform="rotate(90)"')
   })
 
   test('keeps the player marker inside the map', () => {
-    const markup = render({ player: { cellX: 60, cellY: -4, facing: 'up' } })
+    const markup = render({ player: playerSource({ cellX: 60, cellY: -4, facing: 'up' }) })
     expect(markup).toContain('transform:translate(50px, 0px)')
   })
 
   test('renders an empty map without player, base or sites', () => {
-    const markup = render({ constructions: [], investigation: [], player: null })
+    const markup = render({ constructions: [], investigation: [], player: playerSource(null) })
     expect(count(markup, 'mission-minimap__base-cell')).toBe(0)
     expect(markup).not.toContain('mission-minimap__player')
     expect(markup).not.toContain('mission-minimap__site ')
     expect(markup).toContain('mission-minimap__progress-count">0 / 0<')
     expect(markup).toContain('style="width:0%"')
+    // A valid ARIA range even with no sites (min < max).
+    expect(markup).toContain('aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"')
+    expect(markup).toContain('aria-valuetext="0 of 0 sites completed"')
+  })
+
+  test('hides the player marker when no player source is given', () => {
+    expect(render()).not.toContain('mission-minimap__player')
+  })
+
+  test('the map label counts only the base cells it draws', () => {
+    const markup = render({ constructions: [...initialBase, { kind: 'base_tile', cellX: 50, cellY: 0 }] })
+    expect(markup).toContain('aria-label="Mission map: base of 9 cells, 0 of 10 investigation sites completed"')
   })
 })
