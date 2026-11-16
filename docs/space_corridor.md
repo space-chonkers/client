@@ -77,7 +77,7 @@ src/
 3. Determine which cardinal sides receive closed walls based on `wallCount` (`0..3`) and `isCorner`.
 4. Attach hull walls and high-contrast coral marker caps (`#ff595e`) flush with the `1x1` tile borders on closed sides.
 5. Render a center floor node and extend cyan-teal floor guide arms (`#00a896`) exclusively toward open cardinal sides.
-6. In `PlayerSandbox`, `CorridorGrid.constrainMovement` prevents the `0.55`-scaled astronaut from passing through closed corridor walls or corner pillars.
+6. In multiplayer, the server applies the same `0.12`-unit wall clearance as `CorridorGrid`; its authoritative position updates prevent the `0.55`-scaled astronaut from crossing closed corridor sides.
 
 ### Business Rules
 - A side shared with an adjacent corridor tile is always open (no wall, floor guide arm extended).

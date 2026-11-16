@@ -1,108 +1,37 @@
-# Hazard Alert Banner
+# Hazard alerts
 
-## 1. Overview
+The mission HUD maps server phenomena to a warning banner and, for persistent
+phenomena, an in-progress label below the minimap. The server's reliable
+`match.phenomenon` events drive start, instant, and resolve transitions; current
+match state/frames also seed the alert when a mission is already in progress.
 
-On every tick the server sends a hazard code. A non-zero code shows a warning banner and plays a siren once, when the banner appears. Closing the banner with **X** replaces it with a small "<Hazard> in progress" label in the top-right corner, which stays until the hazard is resolved. Only one hazard can be active at a time; codes received meanwhile are ignored.
-
-| Code | Hazard | Icon |
+| Code | Phenomenon | Behavior |
 |---|---|---|
-| `0` | Nothing happens | — |
-| `1` | Solar Storm | `radiation` |
-| `2` | Water Leak | `water` |
-| `3` | Oxygen Loss | `oxygen` |
-| `4` | Rotten Food | `food` |
+| `1` | Solar storm | Persistent; clear it at the stash with energy. |
+| `2` | Water leak | Persistent; clear it at the stash with energy. |
+| `3` | Oxygen loss | Persistent; clear it at the stash with energy. |
+| `4` | Rotten food | Instant resource loss; closing the banner does not leave an in-progress label. |
 
-### Scope
+## Behavior
 
-- **Included:** code → hazard mapping, banner UI, "in progress" label, alarm sound, and a temporary simulated tick stream for **Solo** missions.
-- **Excluded:** the hazards' effects on the game (resources, damage, etc.), how a hazard gets solved, and the real server-tick connection.
+- One hazard at a time. Repeats and other hazard events are ignored while an
+  alert or in-progress hazard is visible.
+- Persistent hazards show a warning banner and sound the alarm once. Closing the
+  warning stops the alarm and moves the hazard to the in-progress label. The
+  server's `resolved` event clears either presentation state.
+- Instant hazards show the warning and alarm, but closing the warning dismisses
+  it without creating an in-progress label.
+- Unknown server codes are ignored with a console warning; code `0` means no
+  hazard.
+- Leaving the match clears the alert and stops the alarm.
 
-## 2. Architecture
+`useHazardAlert` owns the state and alarm lifecycle. `App.tsx` feeds it server
+phenomenon events and active state; `HazardAlertBanner` and
+`HazardOngoingLabel` are presentational components. Hazard effects and resolution
+remain server-authoritative.
 
-```text
-src/
-├── App.tsx                        # Owns useHazardAlert, enables simulated ticks in Solo, renders label + banner
-├── audio/
-│   └── AlarmSound.ts              # Procedural warning siren (Web Audio API)
-├── game/
-│   └── hazards/
-│       ├── hazardEvents.ts        # Codes, hazard definitions, getHazardByCode
-│       ├── useHazardAlert.ts      # Tick codes → warning banner, ongoing hazard, alarm
-│       └── useSimulatedHazardTicks.ts # TEMPORARY fake server ticks (Solo only)
-└── ui/
-    ├── HazardAlertBanner.tsx      # Warning banner with X button
-    ├── hazardAlertBanner.css
-    ├── HazardOngoingLabel.tsx     # "In progress" label (stacked under the minimap)
-    └── hazardOngoingLabel.css
-```
-
-- `hazardEvents.ts` is the single source of truth for codes and texts.
-- `useHazardAlert` holds the hazard state; the UI components are purely presentational.
-- `AlarmSound` builds on `audio/soundManager.ts` like `BackgroundMusic`: it plays through the shared `AudioContext`, and `useHazardAlert` calls `stop()` on unmount.
-
-## 3. Implementation Details
-
-| Module | Responsibility |
-|---|---|
-| `getHazardByCode(code)` | Returns the `HazardDefinition` for codes 1–4, `null` for 0 or unknown codes. |
-| `useHazardAlert()` | Returns `{ warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }`. Both hazards are a `HazardDefinition` or `null`. |
-| `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon badge, title, description and X button. |
-| `HazardOngoingLabel` | Prop `hazard`. Pill: icon + "<Hazard> in progress". It has no position of its own: `App` passes it to `PlayerSandboxView` as `topRightStatus`, which stacks it under the mission minimap in the top-right HUD column. |
-| `AlarmSound` | `play()` (siren: 6 low-passed square beeps alternating 880 / 660 Hz, ~1.5 s), `stop()`. |
-| `useSimulatedHazardTicks(enabled, onHazardCode)` | Temporary. While `enabled`, calls `onHazardCode` every 5 s with `0` (70%) or a random hazard code 1–4 (30%). Clears its interval when disabled or unmounted. |
-
-## 4. Business Logic
-
-1. Each tick, call `receiveHazardCode(code)`.
-2. `0` is ignored. Unknown codes are ignored with a `console.warn`.
-3. A valid code shows the banner (`warningHazard`) and plays the alarm. This is the only moment the alarm plays.
-4. Hazards never stack: only one can be active at a time. While a hazard is in the banner or in progress, every other code is ignored, whether it is a repeat of the same hazard or a different one (no new banner, no new alarm).
-5. A new hazard is accepted only once the current one is resolved (`resolveOngoingHazard()`) or cleared (`dismiss()`).
-6. The banner has no timer: it stays until **X** is clicked. `closeWarning()` stops the alarm, hides the banner and makes that hazard the `ongoingHazard`, shown by `HazardOngoingLabel`.
-7. `resolveOngoingHazard()` removes the label. Nothing calls it yet: it is the hook for the future resolution logic.
-8. `dismiss()` (called by `App`'s `goHome`, currently only reachable from the co-op lobby's leave action) clears the banner and the ongoing hazard and stops the alarm.
-
-### UI rules
-
-- The banner shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with the other HUD panels. A thin 4 px top strip and the uppercase title use the hazard's icon color (`ICON_COLORS[hazard.icon]`, passed as `--hazard-accent`); the description stays light text. The 40 px icon wobbles, and the X is a flat button with a light hover highlight (no `.chunky-button`).
-- The "in progress" label shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with `ResourceBar` and `ActionButtons`: translucent dark panel with blur, slate border, soft shadow, 28 px icon. The hazard's title is shown in its icon color (`--hazard-accent`).
-- Screen readers: the banner's title and description are in a `role="alert"` region; the X button is labelled "Close <Hazard> warning"; the "in progress" label is a `role="status"`.
-- Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the back button.
-- Above 900 px the mission minimap only grows into the space right of the 560 px banner, so they never overlap (see `docs/mission_minimap.md`).
-- `prefers-reduced-motion` disables the animations.
-
-## 5. Testing
-
-Click **Solo** on the homepage: `App` enables `useSimulatedHazardTicks`, which feeds `receiveHazardCode` a code every 5 s as if it came from the server (mostly `0`, sometimes a hazard). Close the banner with **X** to see the "in progress" label. Later ticks are ignored while that hazard is active; since nothing resolves it yet, only one hazard appears per mission. The mission screen has no "Back to home" button; reload the page to start over.
-
-Tune `SIMULATED_TICK_INTERVAL_MS` and `SIMULATED_HAZARD_CHANCE` in `useSimulatedHazardTicks.ts` to test faster or slower.
-
+## Validation
 ```bash
-bun run build   # TypeScript check + production build
+bun run build
+bun test ./tests
 ```
-
-### Connecting the real server
-
-1. Delete `useSimulatedHazardTicks.ts`.
-2. In `App.tsx`, replace the `useSimulatedHazardTicks(...)` call with the server subscription, passing each tick's code to `hazardAlert.receiveHazardCode`.
-
-`useHazardAlert` needs no changes: it already handles `0`, unknown codes, repeats and the one-hazard-at-a-time rule.
-
-## 6. Known Limitations
-
-- Not yet connected to the server tick stream; only the simulated Solo ticks feed codes.
-- No resolution logic yet, so the "in progress" label stays for the rest of the mission.
-- The alarm volume is fixed and is not affected by the music volume control or mute.
-- Only one hazard at a time; codes received while one is active are dropped, not queued.
-
-## 7. Change History
-
-| Date | Version | Description |
-|---|---|---|
-| 2026-11-15 | 1.0.0 | Initial banner, countdown, alarm and Solo test trigger |
-| 2026-11-15 | 1.1.0 | X button + compact countdown, countdown removed from the full banner, final alarm at 3 s, "in progress" label |
-| 2026-11-15 | 1.2.0 | Removed "Warning · Incoming hazard" label, siren alarm, 10 s countdown, alarm only when the banner first appears |
-| 2026-11-15 | 1.3.0 | Removed the countdown, progress bar and compact view; closing the banner shows the "in progress" label |
-| 2026-11-15 | 1.4.0 | `AlarmSound` uses the shared `soundManager`; `dispose()` removed in favor of `stop()` |
-| 2026-11-15 | 1.5.0 | One-shot Solo trigger replaced by `useSimulatedHazardTicks` (periodic fake server ticks) |
-| 2026-11-15 | 1.6.0 | Hazards no longer stack: codes are ignored while a hazard is in the banner or in progress |

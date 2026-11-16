@@ -229,10 +229,80 @@ export class CorridorGrid {
       }
     }
 
+    if (added.length === 0) return
+
+    const toRebuild = new Map<string, readonly [number, number]>()
     for (const [x, z] of added) {
+      toRebuild.set(toTileKey(x, z), [x, z])
+      for (const { dx, dz } of NEIGHBOR_OFFSETS) {
+        const nx = x + dx
+        const nz = z + dz
+        const neighborKey = toTileKey(nx, nz)
+        if (this.tiles.has(neighborKey)) {
+          toRebuild.set(neighborKey, [nx, nz])
+        }
+      }
+    }
+
+    for (const [x, z] of toRebuild.values()) {
       this.rebuildTileMesh(x, z)
     }
     if (added.length > 0) this.notifyOccupancyChange()
+  }
+
+  /** Reconciles the displayed base with an authoritative construction snapshot. */
+  replaceConstructions(
+    constructions: ReadonlyArray<ConstructionPayload>,
+    originCell: { readonly cellX: number; readonly cellY: number } = {
+      cellX: 0,
+      cellY: 0,
+    },
+  ): void {
+    const desired = new Map<string, { gridX: number; gridZ: number; kind: ConstructionKind }>()
+    for (const item of constructions) {
+      const gridX = Math.round(item.cellX - originCell.cellX)
+      const gridZ = Math.round(item.cellY - originCell.cellY)
+      desired.set(toTileKey(gridX, gridZ), { gridX, gridZ, kind: item.kind })
+    }
+
+    const dirty = new Map<string, readonly [number, number]>()
+    const markDirty = (gridX: number, gridZ: number) => {
+      dirty.set(toTileKey(gridX, gridZ), [gridX, gridZ])
+    }
+    let changed = false
+
+    for (const [key, tile] of this.tiles) {
+      const { gridX, gridZ } = fromTileKey(key)
+      const replacement = desired.get(key)
+      if (replacement && replacement.kind === tile.kind) continue
+
+      this.object.remove(tile.group)
+      disposeGroup(tile.group)
+      this.tiles.delete(key)
+      changed = true
+      markDirty(gridX, gridZ)
+      for (const { dx, dz } of NEIGHBOR_OFFSETS) markDirty(gridX + dx, gridZ + dz)
+
+      if (!replacement) {
+        const plinth = this.plinths.get(key)
+        if (plinth) {
+          this.object.remove(plinth)
+          this.plinths.delete(key)
+        }
+      }
+    }
+
+    for (const [key, tile] of desired) {
+      if (this.tiles.has(key)) continue
+      this.tiles.set(key, { kind: tile.kind, group: new THREE.Group() })
+      changed = true
+      markDirty(tile.gridX, tile.gridZ)
+      for (const { dx, dz } of NEIGHBOR_OFFSETS) markDirty(tile.gridX + dx, tile.gridZ + dz)
+    }
+
+    if (!changed) return
+    for (const [gridX, gridZ] of dirty.values()) this.rebuildTileMesh(gridX, gridZ)
+    this.notifyOccupancyChange()
   }
 
   /** Removes a corridor tile at (gridX, gridZ) and updates adjacent neighbor walls. */
@@ -276,6 +346,10 @@ export class CorridorGrid {
    * and the central stash cargo box.
    */
   isWalkable(x: number, z: number): boolean {
+    return this.isWalkableWithStashCheck(x, z, true)
+  }
+
+  private isWalkableWithStashCheck(x: number, z: number, blockStash: boolean): boolean {
     const tx = Math.round(x)
     const tz = Math.round(z)
     const tile = this.tiles.get(toTileKey(tx, tz))
@@ -286,6 +360,7 @@ export class CorridorGrid {
 
     // Solid cargo box on 'stash' tiles blocks the central area around the box.
     if (
+      blockStash &&
       tile.kind === 'stash' &&
       Math.abs(dx) < STASH_COLLISION_HALF &&
       Math.abs(dz) < STASH_COLLISION_HALF
@@ -314,19 +389,20 @@ export class CorridorGrid {
     const tx = Math.round(prev.x)
     const tz = Math.round(prev.z)
     if (!this.hasTile(tx, tz)) return
+    const blockStash = this.isWalkable(prev.x, prev.z)
 
     let resolvedX = prev.x
     let resolvedZ = prev.z
 
     // 1. Resolve X-axis movement monotonically (never pushes backward)
-    if (this.isWalkable(target.x, resolvedZ)) {
+    if (this.isWalkableWithStashCheck(target.x, resolvedZ, blockStash)) {
       resolvedX = target.x
     } else {
       let low = prev.x
       let high = target.x
       for (let i = 0; i < 6; i++) {
         const mid = (low + high) * 0.5
-        if (this.isWalkable(mid, resolvedZ)) low = mid
+        if (this.isWalkableWithStashCheck(mid, resolvedZ, blockStash)) low = mid
         else high = mid
       }
       resolvedX = low
@@ -334,19 +410,19 @@ export class CorridorGrid {
       const dirX = Math.sign(target.x - prev.x)
       if (dirX !== 0 && this.getTileKind(tx + dirX, tz) === 'base_tile' && delta > 0) {
         const nudgedZ = moveToward(resolvedZ, tz, CORNER_SLIDE_SPEED * delta)
-        if (this.isWalkable(resolvedX, nudgedZ)) resolvedZ = nudgedZ
+        if (this.isWalkableWithStashCheck(resolvedX, nudgedZ, blockStash)) resolvedZ = nudgedZ
       }
     }
 
     // 2. Resolve Z-axis movement monotonically (never pushes backward)
-    if (this.isWalkable(resolvedX, target.z)) {
+    if (this.isWalkableWithStashCheck(resolvedX, target.z, blockStash)) {
       resolvedZ = target.z
     } else {
       let low = prev.z
       let high = target.z
       for (let i = 0; i < 6; i++) {
         const mid = (low + high) * 0.5
-        if (this.isWalkable(resolvedX, mid)) low = mid
+        if (this.isWalkableWithStashCheck(resolvedX, mid, blockStash)) low = mid
         else high = mid
       }
       resolvedZ = low
@@ -354,7 +430,7 @@ export class CorridorGrid {
       const dirZ = Math.sign(target.z - prev.z)
       if (dirZ !== 0 && this.getTileKind(tx, tz + dirZ) === 'base_tile' && delta > 0) {
         const nudgedX = moveToward(resolvedX, tx, CORNER_SLIDE_SPEED * delta)
-        if (this.isWalkable(nudgedX, resolvedZ)) resolvedX = nudgedX
+        if (this.isWalkableWithStashCheck(nudgedX, resolvedZ, blockStash)) resolvedX = nudgedX
       }
     }
 
@@ -371,14 +447,14 @@ export class CorridorGrid {
       this.object.remove(plinth)
     }
     this.tiles.clear()
+    this.plinths.clear()
+    this.plinthGeo.dispose()
+    this.plinthMat.dispose()
     this.occupancyListeners.clear()
   }
 
   private notifyOccupancyChange(): void {
     for (const listener of this.occupancyListeners) listener()
-    this.plinths.clear()
-    this.plinthGeo.dispose()
-    this.plinthMat.dispose()
   }
 
   private refreshTileAndNeighbors(x: number, z: number): void {

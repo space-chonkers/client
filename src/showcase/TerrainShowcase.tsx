@@ -36,7 +36,7 @@ const PRESETS: { id: CameraPreset; label: string }[] = [
 ]
 
 /** Shown with backend failures: in development the Vite proxy forwards the terrain route to the local Go server. */
-const BACKEND_HINT = 'Is the Go server running on localhost:8080?'
+const BACKEND_HINT = 'Is the Go server running on localhost:8081?'
 /** HTTP statuses from this one up mean the backend (or the dev proxy in front of it) is unavailable. */
 const FIRST_SERVER_ERROR_STATUS = 500
 

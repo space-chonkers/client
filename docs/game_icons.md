@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`GameIcons` provides the shared 2D iconography system for the game client, covering the 5 shared-pool resource/status indicators (`oxygen`, `water`, `energy`, `food`, `radiation`) and the 3 construction/action events (`build`, `expand`, `collect`).
+`GameIcons` provides shared 2D iconography for the four resource pools, hazard alerts, and construction/action events. The radiation icon identifies a solar-storm hazard; it is not a resource pool.
 
 ### Objectives
 - Expose resolved asset URLs (`ICON_PNG_URLS`) for the 8 transparent `.png` icons so they can be used in both React UI components and Three.js textures/sprites.
@@ -52,9 +52,10 @@ src/
 
 ### Types and Interfaces
 
-- `PoolResourceIconType`: `'oxygen' | 'water' | 'energy' | 'food' | 'radiation'`
+- `PoolResourceIconType`: `'oxygen' | 'water' | 'energy' | 'food'`
+- `HazardIconType`: `'radiation' | 'oxygen' | 'water' | 'food'`
 - `ConstructionEventIconType`: `'build' | 'expand' | 'collect'`
-- `GameIconType`: `PoolResourceIconType | ConstructionEventIconType`
+- `GameIconType`: `PoolResourceIconType | HazardIconType | ConstructionEventIconType`
 - `GameIconProps`:
   - `type: GameIconType`
   - `size?: number` (defaults to `48`)
@@ -69,12 +70,12 @@ src/
 3. If `amount !== undefined`, renders a bold numeric/text readout next to the icon image (`0` is rendered properly because the check is strict against `undefined`).
 
 ### Business Rules
-- Every resource and action icon pairs a distinct silhouette with a Tritanopia-safe color in `ICON_COLORS`:
+- Every resource, hazard, and action icon has a color in `ICON_COLORS`:
   - `oxygen`: `#b3f7ff`
   - `water`: `#1971ff`
   - `energy`: `#facc15`
   - `food`: `#fb923c`
-  - `radiation`: `#ff4d6d`
+  - `radiation` (solar-storm hazard): `#ff4d6d`
   - `build`: `#e2e8f0`
   - `expand`: `#2ec4b6`
   - `collect`: `#7dd3fc`

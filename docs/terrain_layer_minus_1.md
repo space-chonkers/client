@@ -218,7 +218,7 @@ bun run dev
 # then open http://localhost:5173/?view=terrain-showcase
 ```
 
-For **Real Mars**, also run the Go server on `localhost:8080` (server repository:
+For **Real Mars**, also run the Go server on `localhost:8081` (server repository:
 `docker compose up --build`). `vite.config.ts` proxies `/v1/mars-terrain` to it, so the
 request is same-origin and needs no CORS setup. The proxy is `server.proxy`, which only
 exists in the Vite dev server; production builds contain no proxy and no showcase (the
@@ -239,7 +239,7 @@ drop that branch and the lazily imported showcase chunk.
 | Backend unreachable (fetch rejects) | `MarsTerrainRequestError` with `status: null` |
 | Backend answers non-2xx (the dev proxy answers 500 when the Go server is down) | `MarsTerrainRequestError` with that `status` |
 | Seed outside [0, 2³²) passed to `fetchMarsTerrain` | `RangeError`; no request is sent |
-| Any Real Mars failure in the showcase | Stage stays empty; the panel shows the error (with a hint to start the Go server on localhost:8080 for unreachable/5xx) and a Retry button; details are logged to the console |
+| Any Real Mars failure in the showcase | Stage stays empty; the panel shows the error (with a hint to start the Go server on localhost:8081 for unreachable/5xx) and a Retry button; details are logged to the console |
 | Seed, source or view changes while a request is pending | The request is aborted and its result ignored |
 | `createReliefMap` given `elevation` whose sample count is not `(cols + 1) × (rows + 1)` | `RangeError`; no map is built |
 

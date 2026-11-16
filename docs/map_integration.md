@@ -40,7 +40,7 @@ src/game/
 
 | Symbol | Responsibility |
 |---|---|
-| `MarsMapLayer` | Builds and positions Layer `-1` (procedural `70×70`, or real `90×90`: the measured `50×50` inside a synthetic border) below Layer `0`, mines built cells, and exposes `dispose()`. |
+| `MarsMapLayer` | Builds and positions Layer `-1` (procedural `75×75`, or real `90×90`: the measured `50×50` inside a synthetic border) below Layer `0`, mines built cells, and exposes `dispose()`. |
 | `MarsMapLayer.isRealTerrain` | Whether the layer draws real elevation (and grades built cells). |
 | `createMarsTerrainScenery(data)` (`terrain-kit/marsTerrainScenery.ts`) | Real terrain's display map: measured core, synthetic procedural border, procedural classification for the art. |
 | `resolveMissionTerrainConfig(env)` | Source (`mars` / `procedural`), seed and API base URL for the mission. |
@@ -68,9 +68,8 @@ type MissionTerrain =
 ## 4. Business Logic
 
 ### Coordinate Alignment & Grounding
-- Procedural fallback maps are generated at `70×70` (`MAP_SIZE + 2 * 10` border cells) so map edges stay outside the camera view while gameplay remains constrained to the central `50×50` grid.
-- Before meshing, `prepareInitialBaseTerrain` levels the `initialBaseCells` to their average relief and clears `feature` to `'none'` so rocks or formations never spawn inside the starting base. On procedural maps it also sets `geology: 'plain'` and `region: 'plains'`, because dunes (up to 0.3 units), rubble and volcanic flow fronts add micro-relief on top of the relief that would break the flat ground.
-- The homepage (`src/home/MarsHomeScene.tsx`) reuses `MarsMapLayer` with a disc of leveled cells as `initialBaseCells` to get a flat walkable circle (see `docs/homepage.md`).
+- Procedural fallback maps are generated at `75×75` (a non-playable outer margin around the `50×50` grid) so map edges stay outside the camera view while gameplay remains constrained to the central `50×50` grid.
+- Before meshing, `prepareInitialBaseTerrain` levels the initial `3×3` base cells to their average relief and clears `feature` to `'none'` so rocks or formations never spawn inside the starting base.
 - `MarsMapLayer` offsets `terrain.root` in X/Z so every `(cellX, cellY)` in `0..49` matches its terrain cell 1:1, and sets `terrain.root.position.y = -avgBaseHeight - 0.02` using the average `surface.heightAt` of the initial `3×3` base.
 - `CorridorGrid` adds a shared `0.85`-unit foundation plinth underneath each placed tile (`y = 0` down to `-0.85`) so newly built corridors stay visually grounded over craters and terrain dips without regenerating terrain chunks.
 - When a corridor is built onto a cell (`E` / `Space`), `MarsMapLayer.mineCell(x, z)` clamps any Layer `-1` terrain or baked rock vertices inside that cell (plus a margin, `±0.76`) down to `y = -0.18` so corridors and the player always remain on top. The initial base cells are mined the same way when the scene starts.
@@ -85,8 +84,8 @@ Real terrain is **measured shape + procedural game art + synthetic surroundings*
 | Construction | `mineCell` grading | Rendered meshes only, around built cells |
 
 - **Shape:** heights are the measured metres at true scale (10 m cells → 1 world unit per 10 m), bilinear between samples; nothing is exaggerated. Payload cell `(col, row)` sits under server cell `(cellX, cellY)`, north-up. `createReliefField` draws heights from `map.elevation` whenever it exists, so classification only changes colours, shading and dressing, never the heightfield (tested).
-- **Art (game art, not observations):** the display map is classified with the same procedural classifier and dressed by the same placement, baking and scatter systems as procedural maps: rocks and boulders, clusters and debris, mesas, buttes, pillars, sedimentary outcrops, ground cracks, hematite/gypsum/olivine/sulfur deposits, and the varied surface palette. The classifier's input is *local relief* (each cell's elevation minus its ~130 m neighbourhood mean, normalized over the measured cells): real windows are dominated by smooth regional tilts, which as plain normalized relief left them about half as dressed as procedural maps with almost no debris. Asset density now lands close to procedural (e.g. 309–600 placed assets per map vs 431 for procedural seed 42) and is deterministic per payload.
-- **Synthetic surroundings:** the border is 20 cells per side (`MARS_SCENERY.borderCells`), so the mission camera, which sees ~10–15 cells past the playable edge, never reaches the void. Each synthetic sample starts at its nearest measured boundary sample, continues that boundary's outward slope (levelling off over 3 cells), and blends in procedural relief from `generateLandforms` (the procedural map generator), scaled to the measured ground's own local relief, with a weight of 0 at the seam and 1 at the outer edge. Height and slope therefore match across the seam: on the served regions the change of slope at the seam is about half of what the measured ground itself does next to it. Procedural maps keep their `70×70` map and 10-cell border unchanged.
+- **Art (game art, not observations):** the display map is classified with the same procedural classifier and dressed by the same placement, baking and scatter systems as procedural maps: rocks and boulders, clusters and debris, mesas, buttes, pillars, sedimentary outcrops, ground cracks, hematite/gypsum/olivine/sulfur deposits, and the varied surface palette. The classifier's input is *local relief* (each cell's elevation minus its ~130 m neighbourhood mean, normalized over the measured cells): real windows are dominated by smooth regional tilts, which as plain normalized relief left them about half as dressed as procedural maps with almost no debris. Asset density now lands close to procedural (e.g. 309–600 placed assets per map vs 431 for the earlier 70×70 procedural seed-42 map) and is deterministic per payload.
+- **Synthetic surroundings:** the border is 20 cells per side (`MARS_SCENERY.borderCells`), so the mission camera, which sees ~10–15 cells past the playable edge, never reaches the void. Each synthetic sample starts at its nearest measured boundary sample, continues that boundary's outward slope (levelling off over 3 cells), and blends in procedural relief from `generateLandforms` (the procedural map generator), scaled to the measured ground's own local relief, with a weight of 0 at the seam and 1 at the outer edge. Height and slope therefore match across the seam: on the served regions the change of slope at the seam is about half of what the measured ground itself does next to it. Procedural maps keep their own `75×75` map (12–13-cell border) unchanged.
 - **Base:** `prepareInitialBaseTerrain` clears features from the base cells on both kinds of map; real ground is then levelled on the rendered mesh when the base cells are mined. The terrain is aligned to the base's average measured height.
 - **Excavation (earthwork):** real ground can sit several units above or below the flat corridor deck (about ±5 units around the base in the served regions), more than the `0.85` plinth covers. On real maps `mineCell` therefore *cuts and fills* the surface: vertices within the mined square are set to `y = -0.18`, and within 2 world units around it they blend smoothly back to their height, so the ground meets corridors with a graded slope instead of a cliff or a gap. Grading only moves ground toward the floor, so cells mined earlier never revert.
 - **Dressing during construction:** props are never squashed or stretched. `bakeStaticMeshes` records each prop's vertex range (`userData.bakedParts`) and `createReliefTerrain` returns the props (`terrain.props`), so `mineCell` can: hide a whole prop (or scatter rock) that reaches over the mined square, hide crack decals anywhere on the graded ground, and move props on the graded slope rigidly with the ground under them (choosing the motion that seats them into the ground rather than leaving an edge hanging). The baked contact shadows and mineral halos painted into the ground are not removed when their prop is hidden.
@@ -120,7 +119,7 @@ Real terrain is **measured shape + procedural game art + synthetic surroundings*
 |---|---|---|
 | `VITE_MARS_TERRAIN_API_URL` | Build time (`.env`, Docker build arg, `compose.yaml`) | Backend origin serving the terrain route, e.g. `https://api.example`, or `/` if a reverse proxy routes `/v1/mars-terrain` on the client's own origin. Empty in production: procedural terrain only. |
 
-- **Development:** nothing to set. `vite.config.ts` proxies `/v1/mars-terrain` to the Go server on `localhost:8080`.
+- **Development:** nothing to set. `vite.config.ts` proxies `/v1/mars-terrain` to the Go server on `localhost:8081`.
 - **Production:** the client is static files behind Nginx (`nginx.conf`), which has no API proxy. Build with the backend origin (`docker build --build-arg VITE_MARS_TERRAIN_API_URL=https://… .` or `VITE_MARS_TERRAIN_API_URL=https://… docker compose build`). The request is a simple cross-origin GET (no preflight), so the Go server's `ALLOWED_ORIGINS` must include the client's origin (its default is `*`). The value is baked into the bundle; changing it needs a rebuild.
 
 ## 8. Error Handling
@@ -173,10 +172,10 @@ bun run build
 - Uses a fixed client-side `seed = 42` until `jam-server` sends a match terrain seed in `MatchState`; co-op players would only share terrain because they share this constant.
 - Expanding corridors onto cells with tall formations mines vertices in-place inside that `1×1` cell, which leaves neighboring vertices outside the cell untouched (procedural maps).
 - Real terrain is drawn at true scale: on steep windows (Russell crater, Candor Chasma) corridors run through graded cuts or along raised fill several units high.
-- Real maps are `90×90` (vs `70×70` procedural): building takes ~25% longer (about 4 s instead of 3.2 s on the development machine).
+- Real maps are `90×90` (vs `75×75` procedural): building takes somewhat longer (about 4 s vs 3.2 s for `70×70` on the development machine).
 - Russell crater windows are more densely dressed (about twice procedural) because their measured surface has a lot of fine local relief.
 - When construction hides a prop, its baked ground tint (contact shadow, mineral halo) stays on the ground.
-- Procedural maps keep the 10-cell border; the camera can still glimpse past it at the very edge of the procedural map.
+- Procedural maps use a 12–13-cell border (`75×75`, from main); at the very edge the camera may still glimpse past it.
 - Production needs `VITE_MARS_TERRAIN_API_URL` at build time and a backend reachable from players' browsers; there is no runtime configuration or Nginx proxy.
 
 ## 14. Future Improvements

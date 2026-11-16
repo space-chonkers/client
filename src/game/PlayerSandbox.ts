@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { MarsTerrainDataV1 } from '../terrain-kit/marsTerrainContract'
-import { CorridorGrid } from './corridor/CorridorGrid'
+import { CorridorGrid, type ConstructionPayload } from './corridor/CorridorGrid'
 import {
   INITIAL_BASE_ORIGIN,
   INITIAL_SERVER_CONSTRUCTIONS,
@@ -13,9 +13,20 @@ import {
   type MissionMapConstruction,
   type MissionMapPlayer,
 } from './minimap/missionMap'
+import { InvestigationSites } from './map/InvestigationSites'
 import { MarsMapLayer } from './map/MarsMapLayer'
-import { FACING_VECTORS } from './player/Facing'
-import { Player } from './player/Player'
+import { FACING_VECTORS, facingToYaw, type Facing } from './player/Facing'
+import { DEFAULT_PLAYER_TUNING, Player } from './player/Player'
+
+function facingFromServer(facing: string): Facing {
+  switch (facing) {
+    case 'north': return 'up'
+    case 'south': return 'down'
+    case 'west': return 'left'
+    case 'east': return 'right'
+    default: return 'down'
+  }
+}
 
 /** Corridor floor deck height so the astronaut stands on top of Layer 0 tiles. */
 const CORRIDOR_DECK_HEIGHT = 0.08
@@ -29,7 +40,7 @@ const MAP_BOUNDS = {
 /** Angled top-down camera, relative to the player. */
 const CAMERA_OFFSET = new THREE.Vector3(0, 9, 7.5)
 const CAMERA_LOOK_HEIGHT = 0.8
-const CAMERA_FOLLOW_SPEED = 6
+const CAMERA_FOLLOW_SPEED = 10
 /** Longest frame step, so a background tab doesn't teleport the player. */
 const MAX_DELTA = 1 / 20
 /** Seconds between player snapshots sent to the view (~10 per second). */
@@ -43,6 +54,19 @@ export interface PlayerSandboxListeners {
   onConstructionsChange?: (constructions: MissionMapConstruction[]) => void
   /** Player world position and facing; sent on start and then at most every `PLAYER_PUBLISH_INTERVAL` while it changes. */
   onPlayerChange?: (player: MissionMapPlayer) => void
+}
+
+/** Fallbacks until the server's welcome message is available. */
+const DEFAULT_TICK_RATE = 60
+const DEFAULT_SERVER_PLAYER_SPEED = 4
+
+const REMOTE_SUIT_COLORS = ['#e2e8f0', '#3ec9b7', '#ff7b54', '#ffd23f'] as const
+
+interface RemotePlayerEntry {
+  player: Player
+  facing: Facing
+  moving: boolean
+  walkPhase: number
 }
 
 /** Layer −1 source for the scene. Omitted fields keep the procedural default (seed 42). */
@@ -62,7 +86,24 @@ export interface PlayerSandboxTerrainOptions {
 export class PlayerSandbox {
   readonly player: Player
   readonly corridors = new CorridorGrid()
-  readonly mapLayer: MarsMapLayer
+  mapLayer: MarsMapLayer
+  readonly investigationSites: InvestigationSites
+
+  private stashCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
+  private terrainOriginCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
+  /** Kept so terrain rebuilt for a new server origin uses the same source. */
+  private readonly terrain: PlayerSandboxTerrainOptions
+  private readonly minedTerrainCells = new Set<string>()
+  private readonly remotes = new Map<string, RemotePlayerEntry>()
+  private lastConstructionsKey = ''
+  private hasLocalServerPosition = false
+  private hasServerMap = false
+  private localMoving = false
+  private localWalkPhase = 0
+  private tickRate = DEFAULT_TICK_RATE
+  private playerSpeed = DEFAULT_SERVER_PLAYER_SPEED
+  private inputCallback: ((move: { x: number; y: number } | null) => void) | null = null
+  private inputAccumulator = 0
 
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
@@ -85,11 +126,11 @@ export class PlayerSandbox {
     private readonly listeners: PlayerSandboxListeners = {},
     terrain: PlayerSandboxTerrainOptions = {},
   ) {
-    // Layer -1: 50x50 playable Martian terrain (+ border margin on procedural maps) aligned with CorridorGrid.
+    this.terrain = terrain
+    // Layer -1: 50x50 playable Martian terrain (+ border margin) aligned with CorridorGrid.
     // Built before the renderer so a terrain that fails to build leaves nothing attached to the page.
     this.mapLayer = new MarsMapLayer({
-      terrainData: terrain.terrainData,
-      seed: terrain.terrainSeed,
+      ...this.terrainSource(),
       originCell: INITIAL_BASE_ORIGIN,
       initialBaseCells: INITIAL_SERVER_CONSTRUCTIONS,
     })
@@ -104,6 +145,14 @@ export class PlayerSandbox {
 
     this.scene.background = new THREE.Color('#1a1d26')
 
+    // 3D golden investigation site beacons synced with base constructions
+    this.investigationSites = new InvestigationSites(
+      INITIAL_SERVER_PAYLOAD.investigation,
+      INITIAL_SERVER_PAYLOAD.grid,
+      INITIAL_BASE_ORIGIN,
+    )
+    this.scene.add(this.investigationSites.object)
+
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload.
     // Subscribed first so the initial load is published like any later change.
     this.corridors.onOccupancyChange(this.publishConstructions)
@@ -113,6 +162,7 @@ export class PlayerSandbox {
     this.corridors.loadConstructions(INITIAL_SERVER_CONSTRUCTIONS, INITIAL_BASE_ORIGIN)
     this.scene.add(this.corridors.object)
     for (const item of INITIAL_SERVER_CONSTRUCTIONS) {
+      this.minedTerrainCells.add(`${item.cellX},${item.cellY}`)
       this.mapLayer.mineCell(
         item.cellX - INITIAL_BASE_ORIGIN.cellX,
         item.cellY - INITIAL_BASE_ORIGIN.cellY,
@@ -120,13 +170,19 @@ export class PlayerSandbox {
     }
 
     // Player (spawns at slot 0: cell (29, 24) -> (0, -1) relative to stash (29, 25), facing north)
-    this.player = new Player({ bounds: MAP_BOUNDS })
+    this.player = new Player({
+      bounds: MAP_BOUNDS,
+      tuning: {
+        ...DEFAULT_PLAYER_TUNING,
+        walkSpeed: DEFAULT_SERVER_PLAYER_SPEED,
+        acceleration: 40,
+        deceleration: 40,
+      },
+    })
     this.player.position.set(0, CORRIDOR_DECK_HEIGHT, -1)
     this.player.setFacing('up')
     this.scene.add(this.player.object)
     this.publishPlayer()
-
-    window.addEventListener('keydown', this.onKeyDown)
 
     // Lights
     this.scene.add(new THREE.HemisphereLight('#dbe7ff', '#4a3a34', 1.4))
@@ -152,36 +208,149 @@ export class PlayerSandbox {
 
   dispose(): void {
     cancelAnimationFrame(this.frameId)
-    window.removeEventListener('keydown', this.onKeyDown)
     this.resizeObserver.disconnect()
     this.input.dispose()
     this.corridors.dispose()
+    this.investigationSites.dispose()
     this.mapLayer.dispose()
     this.player.dispose()
+    for (const remote of this.remotes.values()) {
+      remote.player.dispose()
+    }
+    this.remotes.clear()
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }
 
-  /** Press E or Space to expand a corridor tile onto the empty cell in front of the player. */
-  private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (event.repeat || (event.code !== 'KeyE' && event.code !== 'Space')) return
-    event.preventDefault()
+  setInputCallback(cb: ((move: { x: number; y: number } | null) => void) | null): void {
+    this.inputCallback = cb
+  }
 
+  setServerRules(tickRate: number, playerSpeed: number): void {
+    if (Number.isFinite(tickRate) && tickRate > 0) this.tickRate = tickRate
+    if (Number.isFinite(playerSpeed) && playerSpeed > 0) this.playerSpeed = playerSpeed
+  }
+
+  /** Current WASD intent as a server move vector (x east, y south). */
+  getMoveVector(): { x: number; y: number } | null {
+    const dir = this.input.getMoveDirection()
+    if (!dir) return null
+    const v = FACING_VECTORS[dir]
+    return { x: v.x, y: v.z }
+  }
+
+  /** Server grid cell in front of the local player (for base.build). */
+  getServerBuildTarget(): { cellX: number; cellY: number } {
     const facing = FACING_VECTORS[this.player.facing]
-    const targetX = Math.round(this.player.position.x) + facing.x
-    const targetZ = Math.round(this.player.position.z) + facing.z
+    const localX = Math.round(this.player.position.x) + facing.x
+    const localZ = Math.round(this.player.position.z) + facing.z
+    return { cellX: localX + this.stashCell.cellX, cellY: localZ + this.stashCell.cellY }
+  }
+
+  /** Apply authoritative server state to the scene. */
+  applyServerState(payload: {
+    constructions: ConstructionPayload[]
+    stashOrigin: { cellX: number; cellY: number }
+    grid: { width: number; height: number }
+    investigation: Array<{ cellX: number; cellY: number }>
+    players: Array<{ id: string; slot?: number; x: number; y: number; vx?: number; vy?: number; facing: string }>
+    localPlayerId: string | null
+  }): void {
+    this.stashCell = payload.stashOrigin
+
+    const constructionsKey = `${payload.stashOrigin.cellX},${payload.stashOrigin.cellY}:` +
+      payload.constructions.map((item) => `${item.id}:${item.kind}:${item.cellX},${item.cellY}`).join(';')
+    if (constructionsKey !== this.lastConstructionsKey) {
+      this.lastConstructionsKey = constructionsKey
+      this.corridors.replaceConstructions(payload.constructions, payload.stashOrigin)
+      this.syncTerrain(payload.stashOrigin, payload.constructions, !this.hasServerMap)
+      this.hasServerMap = true
+    }
+
+    this.investigationSites.syncSites(payload.investigation, payload.grid, payload.stashOrigin)
+    this.investigationSites.syncConstructions(payload.constructions)
+    const seen = new Set<string>()
+    for (const p of payload.players) {
+      const localX = p.x - (payload.stashOrigin.cellX + 0.5)
+      const localZ = p.y - (payload.stashOrigin.cellY + 0.5)
+      const facing = facingFromServer(p.facing)
+      if (p.id === payload.localPlayerId) {
+        this.player.position.set(localX, CORRIDOR_DECK_HEIGHT, localZ)
+        this.player.setFacing(facing)
+        this.localMoving = Math.hypot(p.vx ?? 0, p.vy ?? 0) > 0.05
+        if (!this.hasLocalServerPosition) {
+          this.hasLocalServerPosition = true
+          this.updateCamera(1)
+          this.publishPlayer()
+        }
+        continue
+      }
+      seen.add(p.id)
+      const isMoving = Math.hypot(p.vx ?? 0, p.vy ?? 0) > 0.05
+      let entry = this.remotes.get(p.id)
+      if (!entry) {
+        const suitColor = REMOTE_SUIT_COLORS[(p.slot ?? 1) % REMOTE_SUIT_COLORS.length]
+        const remote = new Player({ suitColor })
+        remote.position.set(localX, CORRIDOR_DECK_HEIGHT, localZ)
+        remote.setFacing(facing)
+        this.scene.add(remote.object)
+        entry = {
+          player: remote,
+          facing,
+          moving: isMoving,
+          walkPhase: 0,
+        }
+        this.remotes.set(p.id, entry)
+      } else {
+        entry.player.position.set(localX, CORRIDOR_DECK_HEIGHT, localZ)
+        entry.facing = facing
+        entry.moving = isMoving
+      }
+    }
+    for (const [id, entry] of this.remotes) {
+      if (!seen.has(id)) {
+        this.scene.remove(entry.player.object)
+        entry.player.dispose()
+        this.remotes.delete(id)
+      }
+    }
+  }
+
+  private syncTerrain(
+    origin: { cellX: number; cellY: number },
+    constructions: ReadonlyArray<ConstructionPayload>,
+    forceReset = false,
+  ): void {
     if (
-      targetX < MAP_BOUNDS.minX ||
-      targetX > MAP_BOUNDS.maxX ||
-      targetZ < MAP_BOUNDS.minZ ||
-      targetZ > MAP_BOUNDS.maxZ
+      forceReset ||
+      origin.cellX !== this.terrainOriginCell.cellX ||
+      origin.cellY !== this.terrainOriginCell.cellY
     ) {
+      this.scene.remove(this.mapLayer.object)
+      this.mapLayer.dispose()
+      this.mapLayer = new MarsMapLayer({ ...this.terrainSource(), originCell: origin, initialBaseCells: constructions })
+      this.scene.add(this.mapLayer.object)
+      this.terrainOriginCell = { ...origin }
+      this.minedTerrainCells.clear()
+      for (const item of constructions) {
+        this.minedTerrainCells.add(`${item.cellX},${item.cellY}`)
+        // Real terrain draws measured metres, which relief levelling cannot flatten: mine the base on the mesh.
+        if (this.mapLayer.isRealTerrain) this.mapLayer.mineCell(item.cellX - origin.cellX, item.cellY - origin.cellY)
+      }
       return
     }
 
-    if (this.corridors.placeTile(targetX, targetZ)) {
-      this.mapLayer.mineCell(targetX, targetZ)
+    for (const item of constructions) {
+      const key = `${item.cellX},${item.cellY}`
+      if (this.minedTerrainCells.has(key)) continue
+      this.mapLayer.mineCell(item.cellX - origin.cellX, item.cellY - origin.cellY)
+      this.minedTerrainCells.add(key)
     }
+  }
+
+  /** `MarsMapLayer` options for this scene's terrain source. */
+  private terrainSource(): { terrainData?: MarsTerrainDataV1; seed?: number } {
+    return { terrainData: this.terrain.terrainData, seed: this.terrain.terrainSeed }
   }
 
   private readonly tick = (now: number) => {
@@ -189,10 +358,44 @@ export class PlayerSandbox {
     this.lastTime = now
     this.elapsed += delta
 
-    this.prevPlayerPosition.copy(this.player.position)
-    this.player.update(delta, this.elapsed, this.input.getMoveDirection())
-    this.corridors.constrainMovement(this.prevPlayerPosition, this.player.position, delta)
-    this.publishPlayerThrottled(delta)
+    const moveDir = this.input.getMoveDirection()
+
+    if (this.inputCallback) {
+      // Each input represents one server tick; use the rate advertised by welcome.
+      const inputStepSeconds = 1 / this.tickRate
+      this.inputAccumulator += delta
+      let steps = 0
+      while (this.inputAccumulator >= inputStepSeconds && steps < 4) {
+        this.inputAccumulator -= inputStepSeconds
+        const moveVec = moveDir ? { x: FACING_VECTORS[moveDir].x, y: FACING_VECTORS[moveDir].z } : null
+        this.inputCallback(moveVec)
+        steps++
+      }
+      if (this.inputAccumulator > inputStepSeconds * 4) {
+        this.inputAccumulator = 0
+      }
+
+      // Server positions are authoritative; animate without applying local movement.
+      this.player.object.rotation.y = facingToYaw(this.player.facing)
+      if (this.localMoving) this.localWalkPhase += this.playerSpeed * DEFAULT_PLAYER_TUNING.strideRate * delta
+      this.player.model.pose(this.localWalkPhase, this.localMoving ? 1 : 0, this.elapsed)
+
+      for (const entry of this.remotes.values()) {
+        entry.player.setFacing(entry.facing)
+        entry.player.object.rotation.y = facingToYaw(entry.facing)
+        if (entry.moving) {
+          entry.walkPhase += this.playerSpeed * DEFAULT_PLAYER_TUNING.strideRate * delta
+        }
+        entry.player.model.pose(entry.walkPhase, entry.moving ? 1 : 0, this.elapsed)
+      }
+      this.publishPlayerThrottled(delta)
+    } else {
+      this.prevPlayerPosition.copy(this.player.position)
+      this.player.update(delta, this.elapsed, moveDir)
+      this.corridors.constrainMovement(this.prevPlayerPosition, this.player.position, delta)
+      this.publishPlayerThrottled(delta)
+    }
+    this.investigationSites.update(delta, this.elapsed)
 
     this.updateCamera(1 - Math.exp(-CAMERA_FOLLOW_SPEED * delta))
     this.updateSun()
@@ -202,16 +405,19 @@ export class PlayerSandbox {
   }
 
   private readonly publishConstructions = () => {
-    if (!this.listeners.onConstructionsChange) return
-    this.listeners.onConstructionsChange(
-      occupiedTilesToConstructions(this.corridors.getOccupiedTiles(), INITIAL_BASE_ORIGIN),
+    const constructions = occupiedTilesToConstructions(
+      this.corridors.getOccupiedTiles(),
+      this.stashCell,
     )
+    this.investigationSites.syncConstructions(constructions)
+    this.listeners.onConstructionsChange?.(constructions)
   }
 
   private publishPlayerThrottled(delta: number): void {
     this.playerPublishTimer += delta
     if (this.playerPublishTimer < PLAYER_PUBLISH_INTERVAL) return
-    this.playerPublishTimer = 0
+    // Carry the overshoot so the average rate stays at 1 / PLAYER_PUBLISH_INTERVAL.
+    this.playerPublishTimer -= PLAYER_PUBLISH_INTERVAL
     this.publishPlayer()
   }
 
@@ -220,7 +426,7 @@ export class PlayerSandbox {
     if (!this.listeners.onPlayerChange) return
     const { x, z } = this.player.position
     const next: MissionMapPlayer = {
-      ...sandboxToWorldCell(x, z, INITIAL_BASE_ORIGIN),
+      ...sandboxToWorldCell(x, z, this.stashCell),
       facing: this.player.facing,
     }
     const previous = this.lastPublishedPlayer

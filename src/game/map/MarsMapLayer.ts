@@ -34,10 +34,10 @@ export const DEFAULT_FALLBACK_SEED = 42
 const DEFAULT_CELL_SIZE = 1
 const DEFAULT_SKIRT_DEPTH = 1.7
 /**
- * Extra non-playable terrain border around the 50x50 grid so map edges stay out of view
- * (real maps get a wider synthetic border, `MARS_SCENERY.borderCells`).
+ * Total procedural terrain size (75x75) around the playable 50x50 grid so edges stay out of view
+ * (real maps get their own synthetic border, `MARS_SCENERY.borderCells`).
  */
-const TERRAIN_BORDER_CELLS = 10
+const PROCEDURAL_TERRAIN_SIZE = 75
 const GROUND_CLEARANCE = 0.02
 /** Half-width of the square mined around a built cell: its ±0.5 walls plus a margin so faces never poke inside. */
 const MINE_HALF_SPAN = 0.76
@@ -135,7 +135,7 @@ function prepareInitialBaseTerrain(
 /**
  * Builds and owns the Layer -1 Martian terrain aligned with `CorridorGrid`,
  * centered on the playable `50x50` grid: either seeded procedural relief
- * (`70x70`) or real `MarsTerrainDataV1` (measured `50x50` heights inside a
+ * (`75x75`) or real `MarsTerrainDataV1` (measured `50x50` heights inside a
  * synthetic procedural border, `90x90`), dressed by the same procedural art system.
  */
 export class MarsMapLayer {
@@ -152,11 +152,10 @@ export class MarsMapLayer {
     const skirtDepth = options.skirtDepth ?? DEFAULT_SKIRT_DEPTH
     const origin = options.originCell ?? { cellX: MAP_SIZE / 2, cellY: MAP_SIZE / 2 }
 
-    const proceduralSize = MAP_SIZE + TERRAIN_BORDER_CELLS * 2
     // Real terrain: measured heights, procedural dressing and a synthetic border, as game art.
     const rawMap = options.terrainData
       ? createMarsTerrainScenery(options.terrainData)
-      : generateReliefMap(options.seed ?? DEFAULT_FALLBACK_SEED, proceduralSize, proceduralSize)
+      : generateReliefMap(options.seed ?? DEFAULT_FALLBACK_SEED, PROCEDURAL_TERRAIN_SIZE, PROCEDURAL_TERRAIN_SIZE)
 
     const marginX = Math.floor((rawMap.cols - MAP_SIZE) / 2)
     const marginZ = Math.floor((rawMap.rows - MAP_SIZE) / 2)

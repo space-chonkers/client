@@ -10,7 +10,7 @@ import { createReliefField } from '../../src/terrain-kit/reliefField'
 import { syntheticMarsTerrain } from '../terrain/syntheticMarsTerrain'
 import { createMissionLayers, geometryHash, worldVertices } from './terrainGeometry'
 
-// Each case builds a full 70×70 (procedural) or 90×90 (real) terrain with its dressing.
+// Each case builds a full 75×75 (procedural) or 90×90 (real) terrain with its dressing.
 setDefaultTimeout(120_000)
 
 /** Mined ground height and the mined square's half-width (see MarsMapLayer). */
@@ -100,15 +100,15 @@ function dressingInside(layer: Layer, cells: readonly { gridX: number; gridZ: nu
   return found
 }
 
-describe('procedural terrain (main baseline: PR #43, #46)', () => {
+describe('procedural terrain (main baseline: PRs #43, #46, #47)', () => {
   test('rendered geometry and colours are identical to main after the base and after building corridors', () => {
-    // Hashes recorded from origin/main (770db58) with this same build sequence: positions, vertex and instance colours.
+    // Hashes recorded from origin/main (f6875c0) with this same build sequence: positions, vertex and instance colours.
     const { mapLayer, build } = createMissionLayers()
-    expect(geometryHash(mapLayer.object)).toBe('700759db')
+    expect(geometryHash(mapLayer.object)).toBe('f5ad82fd')
     for (const [x, z] of [[0, -2], [0, -3], [1, -3], [-2, 0], [12, 8], [-20, -20]]) build(x, z)
-    expect(geometryHash(mapLayer.object)).toBe('4030e470')
+    expect(geometryHash(mapLayer.object)).toBe('ceddead1')
     expect(mapLayer.isRealTerrain).toBe(false)
-    expect(mapLayer.map.cols).toBe(70)
+    expect(mapLayer.map.cols).toBe(75)
     mapLayer.dispose()
   })
 })

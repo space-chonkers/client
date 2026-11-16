@@ -2,7 +2,8 @@
  * "Hazard in progress" label. Same look as the hazard banner: cream panel, ink
  * border and hard ink shadow, with the hazard's icon color (`--hazard-accent`)
  * on the icon ring. Positioned by its container: the mission HUD stacks it in
- * the top-right column, under the minimap.
+ * the top-right column, under the minimap, and stretches it to the column width
+ * (the same width as the minimap).
  */
 .hazard-ongoing {
   display: flex;

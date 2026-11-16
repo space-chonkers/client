@@ -10,6 +10,9 @@ COPY . .
 # Empty: missions use procedural terrain. See docs/map_integration.md.
 ARG VITE_MARS_TERRAIN_API_URL=
 ENV VITE_MARS_TERRAIN_API_URL=$VITE_MARS_TERRAIN_API_URL
+
+ARG VITE_WS_URL=""
+ENV VITE_WS_URL=${VITE_WS_URL}
 RUN bun run build
 
 FROM nginx:alpine AS production
