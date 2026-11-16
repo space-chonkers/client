@@ -57,7 +57,8 @@ export interface MarsMapLayerOptions {
 
 ### Coordinate Alignment & Grounding
 - Procedural fallback maps are generated at `70×70` (`MAP_SIZE + 2 * 10` border cells) so map edges stay outside the camera view while gameplay remains constrained to the central `50×50` grid.
-- Before meshing, `prepareInitialBaseTerrain` levels the initial `3×3` base cells to their average relief and clears `feature` to `'none'` so rocks or formations never spawn inside the starting base.
+- Before meshing, `prepareInitialBaseTerrain` levels the `initialBaseCells` to their average relief and clears `feature` to `'none'` so rocks or formations never spawn inside the starting base. On procedural maps it also sets `geology: 'plain'` and `region: 'plains'`, because dunes (up to 0.3 units), rubble and volcanic flow fronts add micro-relief on top of the relief that would break the flat ground.
+- The homepage (`src/home/MarsHomeScene.tsx`) reuses `MarsMapLayer` with a disc of leveled cells as `initialBaseCells` to get a flat walkable circle (see `docs/homepage.md`).
 - `MarsMapLayer` offsets `terrain.root` in X/Z so every `(cellX, cellY)` in `0..49` matches its terrain cell 1:1, and sets `terrain.root.position.y = -avgBaseHeight - 0.02` using the average `surface.heightAt` of the initial `3×3` base.
 - `CorridorGrid` adds a shared `0.85`-unit foundation plinth underneath each placed tile (`y = 0` down to `-0.85`) so newly built corridors stay visually grounded over craters and terrain dips without regenerating terrain chunks.
 - When a corridor is built onto a cell (`E` / `Space`), `MarsMapLayer.mineCell(x, z)` clamps any Layer `-1` terrain or baked rock vertices inside that `1×1` cell down to `y = -0.02` so corridors and the player always remain on top.
@@ -123,3 +124,4 @@ bun run build
 | Date | Version | Description |
 |---|---|---|
 | 2026-11-15 | 1.0.0 | Integrated 50×50 Layer -1 Mars terrain into `PlayerSandbox` |
+| 2026-11-15 | 1.1.0 | Leveled cells become plain ground; homepage uses `MarsMapLayer` as its background |
