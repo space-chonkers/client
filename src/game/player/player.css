@@ -20,3 +20,52 @@
   gap: 12px;
   pointer-events: none;
 }
+
+/* Layer -1 terrain status: a centred notice while it loads, then a one-line source note (bottom-right). */
+.mission-terrain-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  margin: 0;
+  padding: var(--hud-panel-padding);
+  border: 1px solid var(--hud-panel-border);
+  border-radius: var(--hud-panel-radius);
+  background: var(--hud-panel-bg);
+  backdrop-filter: var(--hud-panel-blur);
+  color: var(--hud-text);
+  font-weight: 800;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.mission-terrain-note {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  max-width: min(420px, calc(100% - 32px));
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--hud-panel-bg);
+  color: var(--hud-text);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
+.mission-terrain-note--fallback {
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+}
+
+/* Narrow screens: the bottom-left action panel spans most of the width, so the note sits just above it. */
+@media (max-width: 640px) {
+  .mission-terrain-note {
+    right: 16px;
+    bottom: 136px;
+    left: 16px;
+    max-width: none;
+  }
+}

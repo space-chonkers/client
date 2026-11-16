@@ -23,8 +23,8 @@ Included: cell data model, relief generation, classification, mineral distributi
 terrain meshing, static dressing, a development-only showcase, and the client side
 of the proposed real-elevation contract (validation, adapter, coordinate conversions).
 Excluded: gameplay, Layer 0/1, WebSockets, ingesting or processing real elevation data
-(the backend does that), a Points of Interest catalog. Real elevation is fetched only by
-the development showcase.
+(the backend does that), a Points of Interest catalog. The mission's use of real elevation
+(loading, fallback, excavation) is documented in [map_integration.md](map_integration.md).
 
 ## 2. Architecture
 
@@ -184,11 +184,12 @@ Three.js objects.
 
 ## 6. API and Integrations
 
-One HTTP route, used only by the development showcase:
+One HTTP route, used by the mission (see [map_integration.md](map_integration.md)) and the
+development showcase:
 
 | Call | Request | Result |
 |---|---|---|
-| `fetchMarsTerrain(seed, { signal })` | `GET /v1/mars-terrain/{seed}`, seed an integer in [0, 2³²) | `MarsTerrainDataV1`, validated with `parseMarsTerrainData` |
+| `fetchMarsTerrain(seed, { signal, baseUrl })` | `GET {baseUrl}/v1/mars-terrain/{seed}`, seed an integer in [0, 2³²); `baseUrl` defaults to same origin | `MarsTerrainDataV1`, validated with `parseMarsTerrainData` |
 
 The backend (server `internal/terrain`) picks one of four prepared HiRISE DTM regions
 and a 500 m × 500 m window from the seed. The payload contract is documented in
@@ -202,7 +203,9 @@ const map = createReliefMapFromMarsTerrain(data) // classification: 'none'
 
 ## 7. Configuration and Environment Variables
 
-No environment variables. To open the development showcase:
+The showcase needs no environment variables (the mission's production setting,
+`VITE_MARS_TERRAIN_API_URL`, is described in [map_integration.md](map_integration.md)).
+To open the development showcase:
 
 ```bash
 bun run dev
@@ -212,7 +215,8 @@ bun run dev
 For **Real Mars**, also run the Go server on `localhost:8080` (server repository:
 `docker compose up --build`). `vite.config.ts` proxies `/v1/mars-terrain` to it, so the
 request is same-origin and needs no CORS setup. The proxy is `server.proxy`, which only
-exists in the Vite dev server; production builds contain no proxy and no showcase.
+exists in the Vite dev server; production builds contain no proxy and no showcase (the
+mission's terrain fetch, which is in production builds, uses `VITE_MARS_TERRAIN_API_URL`).
 
 The showcase is gated by `import.meta.env.DEV` in `src/main.tsx`. Production builds
 drop that branch and the lazily imported showcase chunk.
@@ -236,7 +240,7 @@ drop that branch and the lazily imported showcase chunk.
 ## 9. Security Considerations
 
 No user data or credentials are involved. The only network access is the
-unauthenticated, read-only terrain route, called from the development showcase. Its
+unauthenticated, read-only terrain route, called by the mission and the development showcase. Its
 response is untrusted input and is fully validated before use.
 
 ## 10. Performance Considerations

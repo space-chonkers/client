@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { MarsTerrainDataV1 } from '../terrain-kit/marsTerrainContract'
 import { CorridorGrid } from './corridor/CorridorGrid'
 import {
   INITIAL_BASE_ORIGIN,
@@ -44,6 +45,14 @@ export interface PlayerSandboxListeners {
   onPlayerChange?: (player: MissionMapPlayer) => void
 }
 
+/** Layer −1 source for the scene. Omitted fields keep the procedural default (seed 42). */
+export interface PlayerSandboxTerrainOptions {
+  /** Real HiRISE elevation, already fetched and validated. */
+  terrainData?: MarsTerrainDataV1
+  /** Procedural seed, used when `terrainData` is omitted. */
+  terrainSeed?: number
+}
+
 /**
  * Playable sandbox scene: astronaut (Layer 1), corridor grid (Layer 0),
  * 50x50 Martian terrain (Layer -1), follow camera, and lighting.
@@ -74,7 +83,17 @@ export class PlayerSandbox {
   constructor(
     private readonly container: HTMLElement,
     private readonly listeners: PlayerSandboxListeners = {},
+    terrain: PlayerSandboxTerrainOptions = {},
   ) {
+    // Layer -1: 50x50 playable Martian terrain (+ border margin on procedural maps) aligned with CorridorGrid.
+    // Built before the renderer so a terrain that fails to build leaves nothing attached to the page.
+    this.mapLayer = new MarsMapLayer({
+      terrainData: terrain.terrainData,
+      seed: terrain.terrainSeed,
+      originCell: INITIAL_BASE_ORIGIN,
+      initialBaseCells: INITIAL_SERVER_CONSTRUCTIONS,
+    })
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -88,11 +107,6 @@ export class PlayerSandbox {
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload.
     // Subscribed first so the initial load is published like any later change.
     this.corridors.onOccupancyChange(this.publishConstructions)
-    // Layer -1: 50x50 playable Martian terrain (+ border margin) aligned with CorridorGrid
-    this.mapLayer = new MarsMapLayer({
-      originCell: INITIAL_BASE_ORIGIN,
-      initialBaseCells: INITIAL_SERVER_CONSTRUCTIONS,
-    })
     this.scene.add(this.mapLayer.object)
 
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload

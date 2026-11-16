@@ -276,6 +276,9 @@ export function buildTerrain({ grid, field, seed, subdivisions = 3, skirtDepth =
   return { group, surface, chunks }
 }
 
+/** Name of the diorama side-wall mesh, so callers editing the surface can tell it apart from surface chunks. */
+export const TERRAIN_SKIRT_NAME = 'terrain-skirt'
+
 /** Absolute heights of the rock strata exposed on the diorama walls. */
 const STRATA_LEVELS = [0.42, 0.18, -0.1, -0.38, -0.68, -0.98]
 const TOPSOIL = 0.1
@@ -336,7 +339,7 @@ function createSkirt(
   builder.quad(a, b, c, d, color.copy(COLORS.skirt[5]).multiplyScalar(0.6), DOWN)
 
   const mesh = new THREE.Mesh(builder.build(), materials.matte())
-  mesh.name = 'terrain-skirt'
+  mesh.name = TERRAIN_SKIRT_NAME
   mesh.castShadow = true
   mesh.receiveShadow = true
   return mesh

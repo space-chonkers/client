@@ -23,6 +23,11 @@ export class MarsTerrainRequestError extends Error {
 
 export interface FetchMarsTerrainOptions {
   signal?: AbortSignal
+  /**
+   * Origin (and optional path prefix) of the backend, e.g. `https://api.example`.
+   * Defaults to `''`: same origin, which the Vite dev server proxies to the Go server.
+   */
+  baseUrl?: string
   /** Injected in tests; defaults to the global `fetch`. */
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>
 }
@@ -38,11 +43,12 @@ export async function fetchMarsTerrain(seed: number, options: FetchMarsTerrainOp
   if (!Number.isInteger(seed) || seed < 0 || seed > MAX_SEED) {
     throw new RangeError(`Mars terrain seed must be an integer in [0, ${MAX_SEED}], got ${seed}`)
   }
-  const { signal, fetchImpl = fetch } = options
+  const { signal, fetchImpl = fetch, baseUrl = '' } = options
+  const url = `${baseUrl.trim().replace(/\/+$/, '')}${MARS_TERRAIN_ENDPOINT}/${seed}`
 
   let response: Response
   try {
-    response = await fetchImpl(`${MARS_TERRAIN_ENDPOINT}/${seed}`, { signal, headers: { Accept: 'application/json' } })
+    response = await fetchImpl(url, { signal, headers: { Accept: 'application/json' } })
   } catch (error) {
     if (signal?.aborted) throw error
     throw new MarsTerrainRequestError('Mars terrain service unreachable', null, { cause: error })

@@ -6,6 +6,10 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
+# Backend origin for real Mars terrain (GET /v1/mars-terrain/{seed}), baked into the bundle.
+# Empty: missions use procedural terrain. See docs/map_integration.md.
+ARG VITE_MARS_TERRAIN_API_URL=
+ENV VITE_MARS_TERRAIN_API_URL=$VITE_MARS_TERRAIN_API_URL
 RUN bun run build
 
 FROM nginx:alpine AS production

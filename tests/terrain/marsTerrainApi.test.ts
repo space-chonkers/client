@@ -44,6 +44,13 @@ describe('fetchMarsTerrain: successful fetch', () => {
     expect(data).toEqual(payload)
   })
 
+  test('a configured backend origin prefixes the route (trailing slashes ignored)', async () => {
+    const { calls, fetchImpl } = stubFetch(() => jsonResponse(syntheticResponseFor(42)))
+    await fetchMarsTerrain(42, { fetchImpl, baseUrl: 'https://api.example//' })
+    await fetchMarsTerrain(42, { fetchImpl, baseUrl: '/' })
+    expect(calls.map((call) => call.url)).toEqual(['https://api.example/v1/mars-terrain/42', '/v1/mars-terrain/42'])
+  })
+
   test('the largest uint32 seed is accepted', async () => {
     const { calls, fetchImpl } = stubFetch(() => jsonResponse(syntheticResponseFor(4294967295)))
     await fetchMarsTerrain(4294967295, { fetchImpl })
