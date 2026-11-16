@@ -38,7 +38,6 @@ describe('MissionMinimap', () => {
     const markup = render()
     expect(markup).toContain('viewBox="-1.2 -1.2 52.4 52.4"')
     expect(markup).toContain('class="mission-minimap__world-border" x="0" y="0" width="50" height="50"')
-    expect(markup).toContain('North is up')
   })
 
   test('renders the initial 3×3 base with the Stash badge on cell (29, 25)', () => {

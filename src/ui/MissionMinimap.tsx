@@ -211,12 +211,6 @@ export function MissionMinimap({ grid, constructions, investigation, player }: M
     <section className="mission-minimap" aria-label="Mission map">
       <header className="mission-minimap__header">
         <h2 className="mission-minimap__title">Mission map</h2>
-        <span className="mission-minimap__north" title="North is up">
-          N
-          <svg viewBox="0 0 10 12" aria-hidden="true">
-            <path d="M5 0L10 7H6.5V12H3.5V7H0Z" />
-          </svg>
-        </span>
       </header>
 
       <svg

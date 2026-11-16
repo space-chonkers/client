@@ -8,17 +8,40 @@
   overflow: hidden;
 }
 
-/* Top-right HUD column: the mission minimap with transient status (hazard label) below it. */
+/*
+ * Top-right HUD column: the mission minimap with transient status (hazard label)
+ * below it. Both children stretch to the column width, so the minimap is always
+ * as wide as the "<Hazard> in progress" label.
+ */
 .player-sandbox__top-right {
+  /*
+   * 272px fits the longest label ("SOLAR STORM in progress": 28px icon + text
+   * + padding, measured with the Nunito 800/900 metrics) on one line. The
+   * top-centre hazard banner narrows to fit beside it (see hazardAlertBanner.css).
+   */
+  --top-right-hud-width: 272px;
+
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 12px;
+  width: var(--top-right-hud-width);
   pointer-events: none;
+}
+
+/* Below 900px the hazard banner moves to the bottom; the column shares the top row with the ResourceBar. */
+@media (max-width: 900px) {
+  .player-sandbox__top-right {
+    /*
+     * 268px = 16px gutter + 220px ResourceBar + 16px gap + 16px right gutter;
+     * capped at the desktop width so 900px → 901px is seamless.
+     */
+    --top-right-hud-width: clamp(120px, calc(100vw - 268px), 272px);
+  }
 }
 
 /*

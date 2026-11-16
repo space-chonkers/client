@@ -9,7 +9,7 @@ A north-up map of the whole 50×50 world in the top-right corner of the mission 
 - **Excluded:** fog of war, pathfinding, zoom or a full-screen map, multiplayer players, terrain data, mission logic. The minimap only *visualizes* existing state; it never changes game state.
 
 ### Appearance
-- Dark rounded frame matching the other HUD panels (`ResourceBar`, `ActionButtons`), with a `MISSION MAP` title and an `N ↑` badge.
+- Frame built from the shared HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`), like `ResourceBar`, `ActionButtons` and the hazard label. The `MISSION MAP` title uses the same type as the other HUD labels (Nunito 900, uppercase, `0.06em`), and the progress track the same 10 px track as the ResourceBar. The map is always north-up; there is no north badge.
 - Warm Martian ground (radial gradient + a few decorative craters). **The background is stylized**: it is not HiRISE or any measured topography, and it does not match the 3D scene.
 - Subtle 1-cell grid lines, stronger lines every 10 cells, and a light world border.
 - Base cells: teal squares. Stash: cream square with a coral light, drawn on top of its cell.
@@ -109,10 +109,11 @@ Any construction kind counts (`base_tile` or `stash`). Sites outside the grid ar
 ## 6. Layout
 
 - Top-right, 16 px from the edges, in `.player-sandbox__top-right` (a column that also stacks the hazard "in progress" label under the map).
-- Above 900 px the width is a fixed 240 px. The top-centre hazard banner narrows instead (`min(560px, 100% − 2 × 272px)`), so it always fits between the ResourceBar and the minimap.
-- At 900 px and below (the banner moves to the bottom), `clamp(120px, 100vw − 268px, 240px)` keeps it beside the 220 px `ResourceBar`; the width is continuous across 900/901 px.
+- The column owns the width (`--top-right-hud-width` in `player.css`) and stretches both children to it, so **the minimap is always exactly as wide as the hazard "in progress" label**.
+- Above 900 px the width is a fixed 272 px: the longest label ("SOLAR STORM in progress") measured with the Nunito 800/900 metrics, so every label fits on one line. The top-centre hazard banner narrows instead (`min(560px, 100% − 2 × 304px)`), so it always fits between the ResourceBar and the minimap.
+- At 900 px and below (the banner moves to the bottom), `clamp(120px, 100vw − 268px, 272px)` keeps it beside the 220 px `ResourceBar`; the width is continuous across 900/901 px. On narrow widths the label text wraps.
 - Below 388 px there is no room beside the ResourceBar, so the column moves under it (`top: 226px`, assuming the 198 px-tall five-row ResourceBar) and the map keeps its 120 px minimum. Below 480 px the frame chrome gets more compact.
-- Verified without overlaps at 320×568, 320×640, 360, 390, 900, 901, 1000 and 1280 px wide (with the hazard banner visible from 900 px).
+- The layout was verified without overlaps at 320×568, 320×640, 360, 390, 900, 901, 1000 and 1280 px wide with the previous 240 px width. The 272 px width has not been checked in a browser yet.
 - `pointer-events: none`: the map never blocks the scene or input.
 
 ## 7. API, Configuration and Security
@@ -163,3 +164,4 @@ The props already use server-shaped data (`ServerGridDimensions`, `ServerInvesti
 | Date | Version | Description |
 |---|---|---|
 | 2026-11-15 | 1.0.0 | Initial implementation |
+| 2026-11-15 | 1.1.0 | Frame uses the HUD panel tokens; width shared with the hazard "in progress" label (272 px) |

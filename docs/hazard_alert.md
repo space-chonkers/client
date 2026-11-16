@@ -68,7 +68,8 @@ src/
 - The "in progress" label shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with `ResourceBar` and `ActionButtons`: translucent dark panel with blur, slate border, soft shadow, 28 px icon. The hazard's title is shown in its icon color (`--hazard-accent`).
 - Screen readers: the banner's title and description are in a `role="alert"` region; the X button is labelled "Close <Hazard> warning"; the "in progress" label is a `role="status"`.
 - Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the back button.
-- Above 900 px the banner is `min(560px, 100% − 2 × 272px)` wide so it fits between the ResourceBar and the 240 px mission minimap (272 px = 16 px gutter + 240 px minimap + 16 px gap). At 900 px and below it is `min(560px, 100% − 32px)` at the bottom (see `docs/mission_minimap.md`).
+- The "in progress" label stretches to the top-right HUD column, so it is always exactly as wide as the mission minimap (272 px above 900 px; see `docs/mission_minimap.md`).
+- Above 900 px the banner is `min(560px, 100% − 2 × 304px)` wide so it fits between the ResourceBar and the 272 px mission minimap (304 px = 16 px gutter + 272 px minimap + 16 px gap). At 900 px and below it is `min(560px, 100% − 32px)` at the bottom (see `docs/mission_minimap.md`).
 - `prefers-reduced-motion` disables the animations.
 
 ## 5. Testing
