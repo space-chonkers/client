@@ -1,34 +1,33 @@
 /* Player test scene (debug only, see PlayerSandbox.ts). */
 
-.player-sandbox {
+.player-sandbox,
+.player-sandbox__canvas {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
-/* Top-right HUD column: the mission minimap with transient status (hazard label) below it. */
+/* The minimap and status share a width so their right edges align. */
 .player-sandbox__top-right {
+  --top-right-hud-width: 272px;
+
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 12px;
+  width: var(--top-right-hud-width);
   pointer-events: none;
-}
-
-.player-sandbox__canvas {
-  width: 100%;
-  height: 100%;
 }
 
 .player-sandbox__toasts {
   position: absolute;
-  bottom: 16px;
   right: 16px;
+  bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -71,24 +70,24 @@
   position: absolute;
   top: 16px;
   left: 50%;
-  transform: translateX(-50%);
+  z-index: 20;
   margin: 0;
   padding: 8px 16px;
+  transform: translateX(-50%);
   border: 3px solid var(--ink);
   border-radius: 14px;
   background: var(--coral);
   color: var(--cream);
   font-weight: 800;
-  z-index: 20;
 }
 
 .mission-ended-backdrop {
   position: absolute;
   inset: 0;
+  z-index: 30;
   display: grid;
   place-items: center;
   background: rgba(16, 19, 26, 0.72);
-  z-index: 30;
 }
 
 .mission-ended-dialog {
@@ -108,4 +107,18 @@
 .mission-ended-dialog h2,
 .mission-ended-dialog p {
   margin: 0;
+}
+
+/* Below 900px the banner moves to the bottom; the HUD shares the top row. */
+@media (max-width: 900px) {
+  .player-sandbox__top-right {
+    --top-right-hud-width: clamp(120px, calc(100vw - 268px), 272px);
+  }
+}
+
+/* On narrow phones the minimap moves below the four-row ResourceBar. */
+@media (max-width: 387px) {
+  .player-sandbox__top-right {
+    top: calc(178px + 12px);
+  }
 }

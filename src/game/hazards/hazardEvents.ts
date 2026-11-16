@@ -1,4 +1,4 @@
-import type { PoolResourceIconType } from '../../ui/icons/GameIcons'
+import type { HazardIconType } from '../../ui/icons/GameIcons'
 
 /** Code the server sends on a tick when no hazard is coming. */
 export const NO_HAZARD_CODE = 0
@@ -12,7 +12,7 @@ export interface HazardDefinition {
   /** Short instruction shown under the title. */
   description: string
   /** Resource icon that represents the hazard. */
-  icon: PoolResourceIconType
+  icon: HazardIconType
 }
 
 /** Hazards keyed by the non-zero code the server sends on each tick. */

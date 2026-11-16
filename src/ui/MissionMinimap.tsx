@@ -1,4 +1,4 @@
-import { memo, useId, useMemo, type CSSProperties } from 'react'
+import { memo, useId, useMemo, useSyncExternalStore, type CSSProperties } from 'react'
 import type { ServerGridDimensions, ServerInvestigationCell } from '../game/corridor/mockServerPayload'
 import {
   clampMinimapPoint,
@@ -8,8 +8,8 @@ import {
   worldCellToMinimapPoint,
   type InvestigationSiteStatus,
   type MissionMapConstruction,
-  type MissionMapPlayer,
 } from '../game/minimap/missionMap'
+import type { MissionMapPlayerSource } from '../game/minimap/PlayerSnapshotStore'
 import './missionMinimap.css'
 
 export interface MissionMinimapProps {
@@ -19,8 +19,11 @@ export interface MissionMinimapProps {
   constructions: ReadonlyArray<MissionMapConstruction>
   /** Investigation sites in world coordinates. */
   investigation: ReadonlyArray<ServerInvestigationCell>
-  /** Local player, or null before the scene reports a position. */
-  player: MissionMapPlayer | null
+  /**
+   * Live local player. Read through a subscription so position updates only
+   * re-render the marker. Omitted (or a null snapshot) hides the marker.
+   */
+  player?: MissionMapPlayerSource
 }
 
 /** Space, in cells, kept around the world edge so edge markers are not clipped. */
@@ -91,18 +94,16 @@ const MinimapTerrain = memo(function MinimapTerrain({
 
 /** Constructed base cells, with the Stash drawn as a larger badge on top. */
 const MinimapBase = memo(function MinimapBase({
-  grid,
-  constructions,
+  cells,
 }: {
-  grid: ServerGridDimensions
-  constructions: ReadonlyArray<MissionMapConstruction>
+  /** Constructions already filtered to the grid. */
+  cells: ReadonlyArray<MissionMapConstruction>
 }) {
-  const visible = constructions.filter((cell) => isCellInsideGrid(cell, grid))
-  const stashes = visible.filter((cell) => cell.kind === 'stash')
+  const stashes = cells.filter((cell) => cell.kind === 'stash')
 
   return (
     <g className="mission-minimap__base">
-      {visible.map((cell) => (
+      {cells.map((cell) => (
         <rect
           key={`${cell.cellX},${cell.cellY}`}
           className="mission-minimap__base-cell"
@@ -164,7 +165,11 @@ const MinimapSites = memo(function MinimapSites({
   )
 })
 
-function MinimapPlayer({ grid, player }: { grid: ServerGridDimensions; player: MissionMapPlayer }) {
+/** The only part of the minimap subscribed to player updates. */
+function MinimapPlayer({ grid, source }: { grid: ServerGridDimensions; source: MissionMapPlayerSource }) {
+  const player = useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+  if (!player) return null
+
   const { x, y } = clampMinimapPoint(worldCellToMinimapPoint(player), grid)
   // Translation goes through CSS (eased between the ~10 Hz updates); rotation snaps
   // to the facing, avoiding the long way round between 270° and 0°.
@@ -193,21 +198,19 @@ export function MissionMinimap({ grid, constructions, investigation, player }: M
     () => resolveInvestigationProgress(investigation, constructions, grid),
     [investigation, constructions, grid],
   )
-  const progressPercent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0
+  const baseCells = useMemo(
+    () => constructions.filter((cell) => isCellInsideGrid(cell, grid)),
+    [constructions, grid],
+  )
+  const progressPercent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
   const mapLabel =
-    `Mission map: base of ${constructions.length} cells, ` +
+    `Mission map: base of ${baseCells.length} cells, ` +
     `${progress.completed} of ${progress.total} investigation sites completed`
 
   return (
     <section className="mission-minimap" aria-label="Mission map">
       <header className="mission-minimap__header">
         <h2 className="mission-minimap__title">Mission map</h2>
-        <span className="mission-minimap__north" title="North is up">
-          N
-          <svg viewBox="0 0 10 12" aria-hidden="true">
-            <path d="M5 0L10 7H6.5V12H3.5V7H0Z" />
-          </svg>
-        </span>
       </header>
 
       <svg
@@ -224,9 +227,9 @@ export function MissionMinimap({ grid, constructions, investigation, player }: M
           </radialGradient>
         </defs>
         <MinimapTerrain grid={grid} groundGradientId={groundGradientId} />
-        <MinimapBase grid={grid} constructions={constructions} />
+        <MinimapBase cells={baseCells} />
         <MinimapSites sites={progress.sites} />
-        {player && <MinimapPlayer grid={grid} player={player} />}
+        {player && <MinimapPlayer grid={grid} source={player} />}
       </svg>
 
       <footer className="mission-minimap__footer">
@@ -238,9 +241,10 @@ export function MissionMinimap({ grid, constructions, investigation, player }: M
           className="mission-minimap__progress-track"
           role="progressbar"
           aria-label="Investigation sites completed"
-          aria-valuenow={progress.completed}
+          aria-valuenow={progressPercent}
           aria-valuemin={0}
-          aria-valuemax={progress.total}
+          aria-valuemax={100}
+          aria-valuetext={`${progress.completed} of ${progress.total} sites completed`}
         >
           <div className="mission-minimap__progress-fill" style={{ width: `${progressPercent}%` }} />
         </div>

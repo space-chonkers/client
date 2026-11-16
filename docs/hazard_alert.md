@@ -31,7 +31,6 @@ phenomenon events and active state; `HazardAlertBanner` and
 remain server-authoritative.
 
 ## Validation
-
 ```bash
 bun run build
 bun test ./tests

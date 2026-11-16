@@ -12,6 +12,7 @@ import {
   type MissionMapConstruction,
   type MissionMapPlayer,
 } from './minimap/missionMap'
+import { InvestigationSites } from './map/InvestigationSites'
 import { MarsMapLayer } from './map/MarsMapLayer'
 import { FACING_VECTORS, facingToYaw, type Facing } from './player/Facing'
 import { DEFAULT_PLAYER_TUNING, Player } from './player/Player'
@@ -77,13 +78,12 @@ export class PlayerSandbox {
   readonly player: Player
   readonly corridors = new CorridorGrid()
   mapLayer: MarsMapLayer
+  readonly investigationSites: InvestigationSites
 
   private stashCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
   private terrainOriginCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
   private readonly minedTerrainCells = new Set<string>()
   private readonly remotes = new Map<string, RemotePlayerEntry>()
-  private readonly investigationGroup = new THREE.Group()
-  private lastInvestigationKey = ''
   private lastConstructionsKey = ''
   private hasLocalServerPosition = false
   private hasServerMap = false
@@ -124,6 +124,14 @@ export class PlayerSandbox {
 
     this.scene.background = new THREE.Color('#1a1d26')
 
+    // 3D golden investigation site beacons synced with base constructions
+    this.investigationSites = new InvestigationSites(
+      INITIAL_SERVER_PAYLOAD.investigation,
+      INITIAL_SERVER_PAYLOAD.grid,
+      INITIAL_BASE_ORIGIN,
+    )
+    this.scene.add(this.investigationSites.object)
+
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload.
     // Subscribed first so the initial load is published like any later change.
     this.corridors.onOccupancyChange(this.publishConstructions)
@@ -160,8 +168,6 @@ export class PlayerSandbox {
     this.scene.add(this.player.object)
     this.publishPlayer()
 
-    this.scene.add(this.investigationGroup)
-
     // Lights
     this.scene.add(new THREE.HemisphereLight('#dbe7ff', '#4a3a34', 1.4))
     this.sun.position.set(4, 10, 5)
@@ -189,13 +195,13 @@ export class PlayerSandbox {
     this.resizeObserver.disconnect()
     this.input.dispose()
     this.corridors.dispose()
+    this.investigationSites.dispose()
     this.mapLayer.dispose()
     this.player.dispose()
     for (const remote of this.remotes.values()) {
       remote.player.dispose()
     }
     this.remotes.clear()
-    this.clearInvestigation()
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }
@@ -229,6 +235,7 @@ export class PlayerSandbox {
   applyServerState(payload: {
     constructions: ConstructionPayload[]
     stashOrigin: { cellX: number; cellY: number }
+    grid: { width: number; height: number }
     investigation: Array<{ cellX: number; cellY: number }>
     players: Array<{ id: string; slot?: number; x: number; y: number; vx?: number; vy?: number; facing: string }>
     localPlayerId: string | null
@@ -244,7 +251,8 @@ export class PlayerSandbox {
       this.hasServerMap = true
     }
 
-    this.setInvestigation(payload.investigation, payload.stashOrigin)
+    this.investigationSites.syncSites(payload.investigation, payload.grid, payload.stashOrigin)
+    this.investigationSites.syncConstructions(payload.constructions)
     const seen = new Set<string>()
     for (const p of payload.players) {
       const localX = p.x - (payload.stashOrigin.cellX + 0.5)
@@ -257,6 +265,7 @@ export class PlayerSandbox {
         if (!this.hasLocalServerPosition) {
           this.hasLocalServerPosition = true
           this.updateCamera(1)
+          this.publishPlayer()
         }
         continue
       }
@@ -288,38 +297,6 @@ export class PlayerSandbox {
         entry.player.dispose()
         this.remotes.delete(id)
       }
-    }
-  }
-
-  private clearInvestigation(): void {
-    for (const child of this.investigationGroup.children) {
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose()
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose())
-        } else {
-          child.material.dispose()
-        }
-      }
-    }
-    this.investigationGroup.clear()
-  }
-
-  private setInvestigation(
-    cells: Array<{ cellX: number; cellY: number }>,
-    origin: { cellX: number; cellY: number },
-  ): void {
-    const key = `${origin.cellX},${origin.cellY}:${cells.map((c) => `${c.cellX},${c.cellY}`).join(';')}`
-    if (key === this.lastInvestigationKey) return
-    this.lastInvestigationKey = key
-    this.clearInvestigation()
-    for (const cell of cells) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.6, 0.6),
-        new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#664d00' }),
-      )
-      mesh.position.set(cell.cellX - origin.cellX, 0.4, cell.cellY - origin.cellY)
-      this.investigationGroup.add(mesh)
     }
   }
 
@@ -386,12 +363,14 @@ export class PlayerSandbox {
         }
         entry.player.model.pose(entry.walkPhase, entry.moving ? 1 : 0, this.elapsed)
       }
+      this.publishPlayerThrottled(delta)
     } else {
       this.prevPlayerPosition.copy(this.player.position)
       this.player.update(delta, this.elapsed, moveDir)
       this.corridors.constrainMovement(this.prevPlayerPosition, this.player.position, delta)
       this.publishPlayerThrottled(delta)
     }
+    this.investigationSites.update(delta, this.elapsed)
 
     this.updateCamera(1 - Math.exp(-CAMERA_FOLLOW_SPEED * delta))
     this.updateSun()
@@ -401,16 +380,19 @@ export class PlayerSandbox {
   }
 
   private readonly publishConstructions = () => {
-    if (!this.listeners.onConstructionsChange) return
-    this.listeners.onConstructionsChange(
-      occupiedTilesToConstructions(this.corridors.getOccupiedTiles(), INITIAL_BASE_ORIGIN),
+    const constructions = occupiedTilesToConstructions(
+      this.corridors.getOccupiedTiles(),
+      this.stashCell,
     )
+    this.investigationSites.syncConstructions(constructions)
+    this.listeners.onConstructionsChange?.(constructions)
   }
 
   private publishPlayerThrottled(delta: number): void {
     this.playerPublishTimer += delta
     if (this.playerPublishTimer < PLAYER_PUBLISH_INTERVAL) return
-    this.playerPublishTimer = 0
+    // Carry the overshoot so the average rate stays at 1 / PLAYER_PUBLISH_INTERVAL.
+    this.playerPublishTimer -= PLAYER_PUBLISH_INTERVAL
     this.publishPlayer()
   }
 
@@ -419,7 +401,7 @@ export class PlayerSandbox {
     if (!this.listeners.onPlayerChange) return
     const { x, z } = this.player.position
     const next: MissionMapPlayer = {
-      ...sandboxToWorldCell(x, z, INITIAL_BASE_ORIGIN),
+      ...sandboxToWorldCell(x, z, this.stashCell),
       facing: this.player.facing,
     }
     const previous = this.lastPublishedPlayer

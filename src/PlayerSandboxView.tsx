@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { INITIAL_SERVER_PAYLOAD } from './game/corridor/mockServerPayload'
-import type { MissionMapConstruction, MissionMapPlayer } from './game/minimap/missionMap'
+import type { MissionMapConstruction } from './game/minimap/missionMap'
+import { PlayerSnapshotStore } from './game/minimap/PlayerSnapshotStore'
 import { PlayerSandbox } from './game/PlayerSandbox'
 import { ActionButtons } from './ui/ActionButtons'
 import { MissionMinimap } from './ui/MissionMinimap'
@@ -31,16 +32,6 @@ function sameValues<T extends object>(left: T, right: T): boolean {
   return (Object.keys(left) as (keyof T)[]).every((key) => left[key] === right[key])
 }
 
-function facingFromServer(facing: string): MissionMapPlayer['facing'] {
-  switch (facing) {
-    case 'north': return 'up'
-    case 'south': return 'down'
-    case 'west': return 'left'
-    case 'east': return 'right'
-    default: return 'down'
-  }
-}
-
 /** Mounts the server-backed mission scene and its resource, minimap, and action HUDs. */
 export default function PlayerSandboxView({
   matchState,
@@ -62,20 +53,19 @@ export default function PlayerSandboxView({
   const inputRef = useRef(onSendInput)
   inputRef.current = onSendInput
   const [fallbackConstructions, setFallbackConstructions] = useState<ReadonlyArray<MissionMapConstruction>>([])
-  const [fallbackPlayer, setFallbackPlayer] = useState<MissionMapPlayer | null>(null)
+  // Player snapshots update independently so only the minimap marker re-renders.
+  const [playerStore] = useState(() => new PlayerSnapshotStore())
   const [resources, setResources] = useState<ResourceBarValues>({
     oxygen: 0,
     water: 0,
     energy: 0,
     food: 0,
-    radiation: 0,
   })
   const [maxResources, setMaxResources] = useState<ResourceBarValues>({
     oxygen: 100,
     water: 100,
     energy: 100,
     food: 100,
-    radiation: 100,
   })
   const [stash, setStash] = useState<ResourceAmounts>({
     oxygen: 0,
@@ -92,7 +82,7 @@ export default function PlayerSandboxView({
 
     const sandbox = new PlayerSandbox(container, {
       onConstructionsChange: setFallbackConstructions,
-      onPlayerChange: setFallbackPlayer,
+      onPlayerChange: playerStore.set,
     })
     sandbox.setInputCallback((move) => inputRef.current(move))
     sandboxRef.current = sandbox
@@ -101,7 +91,7 @@ export default function PlayerSandboxView({
       sandboxRef.current = null
       sandbox.dispose()
     }
-  }, [])
+  }, [playerStore])
 
   useEffect(() => {
     if (welcome) sandboxRef.current?.setServerRules(welcome.tickRate, welcome.rules.playerSpeed)
@@ -133,6 +123,7 @@ export default function PlayerSandboxView({
     sandbox.applyServerState({
       constructions: matchState.constructions,
       stashOrigin: { cellX: stashConstruction.cellX, cellY: stashConstruction.cellY },
+      grid: matchState.grid,
       investigation: matchState.investigation,
       players: players.map((player) => ({
         id: player.id,
@@ -170,7 +161,6 @@ export default function PlayerSandboxView({
       water: Math.round(source.water.pool.current),
       energy: Math.round(source.energy.pool.current),
       food: Math.round(source.food.pool.current),
-      radiation: 0,
     }
     setResources((current) => sameValues(current, nextResources) ? current : nextResources)
     const nextMaxResources = {
@@ -178,7 +168,6 @@ export default function PlayerSandboxView({
       water: Math.round(source.water.pool.max),
       energy: Math.round(source.energy.pool.max),
       food: Math.round(source.food.pool.max),
-      radiation: 100,
     }
     setMaxResources((current) => sameValues(current, nextMaxResources) ? current : nextMaxResources)
     const nextStash = {
@@ -207,21 +196,11 @@ export default function PlayerSandboxView({
 
   const activePhenomenon = frame?.phenomenon ?? matchState?.phenomenon
   const fixEnabled =
-    nearStash && !ended && activePhenomenon !== undefined && activePhenomenon.type !== 0
+    nearStash && !ended && activePhenomenon !== undefined &&
+    activePhenomenon.type > 0 && activePhenomenon.type < 4
   const minimapGrid = matchState?.grid ?? INITIAL_SERVER_PAYLOAD.grid
   const minimapConstructions = matchState?.constructions ?? fallbackConstructions
   const minimapInvestigation = matchState?.investigation ?? INITIAL_SERVER_PAYLOAD.investigation
-  const players = frame?.players ?? matchState?.players ?? []
-  const localPlayer = players.find((player) => player.id === playerId)
-  const minimapPlayer: MissionMapPlayer | null = localPlayer
-    ? {
-        // MissionMapPlayer uses integer coordinates for cell centers; the wire
-        // protocol uses coordinates measured from each cell's north-west corner.
-        cellX: localPlayer.x - 0.5,
-        cellY: localPlayer.y - 0.5,
-        facing: facingFromServer(localPlayer.facing),
-      }
-    : fallbackPlayer
 
   return (
     <div className="player-sandbox">
@@ -238,7 +217,7 @@ export default function PlayerSandboxView({
           grid={minimapGrid}
           constructions={minimapConstructions}
           investigation={minimapInvestigation}
-          player={minimapPlayer}
+          player={playerStore}
         />
         {topRightStatus}
         <div className="player-sandbox__stash" aria-label="Stash resources">

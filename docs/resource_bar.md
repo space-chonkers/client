@@ -1,18 +1,18 @@
-# Simulated Resource Bar (`ResourceBar.tsx`)
+# Shared Resource Bar (`ResourceBar.tsx`)
 
 ## 1. Overview
 
-`ResourceBar` renders a top-left HUD panel displaying the 5 shared mission resource and status indicators (`oxygen`, `water`, `energy`, `food`, and `radiation`). Each row displays the resource icon, a percentage progress bar filled with the resource's Tritanopia-safe color (`ICON_COLORS`), and its numeric value. By default, it displays simulated baseline values so the HUD can be previewed immediately in the 3D sandbox, while accepting optional live values from game state.
+`ResourceBar` renders the four server-backed mission resource pools (`oxygen`, `water`, `energy`, and `food`) in a top-left HUD panel. Each row displays its icon, a percentage progress bar, and numeric value. Radiation is not a resource pool and is not shown here; its icon is used for hazard presentation.
 
 ### Objectives
-- Display the 5 pool/status resources (`oxygen`, `water`, `energy`, `food`, `radiation`) in a vertical top-left panel using `<GameIcon />`.
+- Display the four shared resource pools (`oxygen`, `water`, `energy`, `food`) in a vertical top-left panel using `<GameIcon />`.
 - Render a color-coded percentage bar (`0%` to `100%` against `MAX_RESOURCE_CAPACITY = 100`) and numeric balance for each resource row.
 - Provide default simulated values (`DEFAULT_SIMULATED_RESOURCES`) with support for partial or full value overrides via props.
-- Preserve full keyboard and mouse interaction with the underlying 3D canvas (`pointer-events: none` on the overlay container).
+- Keep the resource panel presentational; `PlayerSandboxView` supplies values from match state and frames.
 
 ### Scope
 - **Included:** `ResourceBar.tsx`, `resourceBar.css`, and mounting inside `PlayerSandboxView.tsx`.
-- **Excluded:** Action/construction buttons (`build`, `expand`, `collect`), navigation controls, secondary screens, and WebSocket/RabbitMQ state synchronization.
+- **Excluded:** Action/construction buttons (`build`, `expand`, `collect`), navigation controls, and transport handling.
 
 ## 2. Architecture
 
@@ -39,7 +39,7 @@ src/
 
 | Component | Responsibility |
 |---|---|
-| `ResourceBar` | Renders the top-left vertical HUD panel with 5 resource rows (`oxygen`, `water`, `energy`, `food`, `radiation`), each containing the icon, a progress bar colored via `ICON_COLORS[type]`, and the numeric value. |
+| `ResourceBar` | Renders four shared resource rows (`oxygen`, `water`, `energy`, `food`), each containing an icon, a colored progress bar, and the numeric value. |
 | `PlayerSandboxView` | Hosts `<ResourceBar />` above the Three.js player sandbox canvas. |
 
 ### Utilities
@@ -47,7 +47,7 @@ src/
 | Constant | Responsibility |
 |---|---|
 | `MAX_RESOURCE_CAPACITY` | Maximum shared pool capacity per resource (`100`). |
-| `DEFAULT_SIMULATED_RESOURCES` | Default simulated resource numbers (`{ oxygen: 85, water: 70, energy: 90, food: 60, radiation: 12 }`). |
+| `DEFAULT_SIMULATED_RESOURCES` | Preview defaults (`{ oxygen: 85, water: 70, energy: 90, food: 60 }`) used when values are omitted. |
 
 ### Types and Interfaces
 
@@ -58,7 +58,6 @@ src/
     water: number
     energy: number
     food: number
-    radiation: number
   }
   ```
 - `ResourceBarProps`:
@@ -70,8 +69,8 @@ src/
 
 ### Main Workflow
 1. `<PlayerSandboxView />` renders `<ResourceBar />` above the 3D canvas container.
-2. `<ResourceBar />` merges `DEFAULT_SIMULATED_RESOURCES` with any provided `values` prop.
-3. For each resource in `['oxygen', 'water', 'energy', 'food', 'radiation']`, the component calculates `percentage = Math.min(100, Math.max(0, (value / MAX_RESOURCE_CAPACITY) * 100))`.
+2. `<ResourceBar />` merges its preview defaults with any provided `values` prop.
+3. For each pool in `['oxygen', 'water', 'energy', 'food']`, the component calculates `percentage = Math.min(100, Math.max(0, (value / max) * 100))`.
 4. Each `.resource-bar__row` renders `<GameIcon type={type} size={iconSize} />`, `.resource-bar__track` with `.resource-bar__fill` (`width: ${percentage}%`, `backgroundColor: ICON_COLORS[type]`), and `.resource-bar__value`.
 
 ### Business Rules
@@ -89,7 +88,7 @@ src/
 
 ## 6. API and Integrations
 
-This feature does not use external APIs or network integrations.
+`ResourceBar` does not perform network requests. `PlayerSandboxView` passes the latest server pool amounts and capacities as props.
 
 ## 7. Configuration and Environment Variables
 

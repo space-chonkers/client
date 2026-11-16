@@ -11,7 +11,6 @@ export interface ResourceBarValues {
   water: number
   energy: number
   food: number
-  radiation: number
 }
 
 /** Maximum shared pool capacity per resource defined in the game specification. */
@@ -23,7 +22,6 @@ export const DEFAULT_SIMULATED_RESOURCES: Readonly<ResourceBarValues> = {
   water: 70,
   energy: 90,
   food: 60,
-  radiation: 12,
 }
 
 const RESOURCE_ORDER: readonly PoolResourceIconType[] = [
@@ -31,7 +29,6 @@ const RESOURCE_ORDER: readonly PoolResourceIconType[] = [
   'water',
   'energy',
   'food',
-  'radiation',
 ]
 
 export interface ResourceBarProps {
@@ -45,8 +42,8 @@ export interface ResourceBarProps {
 }
 
 /**
- * Top-left HUD resource panel displaying the 5 shared pool/status indicators
- * (oxygen, water, energy, food, and radiation). Each row renders the resource
+ * Top-left HUD resource panel displaying the four shared resource pools
+ * (oxygen, water, energy, and food). Each row renders the resource
  * icon, a color-coded percentage progress bar, and the numeric value.
  */
 export const ResourceBar: React.FC<ResourceBarProps> = ({
