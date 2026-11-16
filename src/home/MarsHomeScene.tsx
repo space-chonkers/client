@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { InputController } from '../game/input/InputController'
+import { MarsMapLayer } from '../game/map/MarsMapLayer'
 import { AstronautModel } from '../game/player/AstronautModel'
 import { DEFAULT_PLAYER_TUNING, Player, type PlayerTuning } from '../game/player/Player'
+import { MAP_SIZE } from '../terrain-kit/reliefMap'
 import {
   MARS_PALETTE,
   ROVER_PATH_RADIUS,
   createMarsBase,
-  createMarsTerrain,
   createRover,
   disposeMarsMaterials,
+  getFlatZoneTiles,
   isMarsTileWalkable,
   type GridPosition,
 } from './scene/marsProps'
@@ -50,6 +52,22 @@ const HOME_PLAYER_TUNING: Readonly<PlayerTuning> = {
 
 const PLAYER_START_TILE: GridPosition = { x: 2, z: 2 }
 const COMPANION_TILE: GridPosition = { x: -2, z: 2 }
+
+/**
+ * Map cell placed at world (0, 0): the center of the game's 50×50 map. Its
+ * terrain border reaches 35 units in every direction, far past the camera
+ * view on any aspect ratio, so the corners never show empty background.
+ */
+const HOME_MAP_ORIGIN_CELL = { cellX: MAP_SIZE / 2, cellY: MAP_SIZE / 2 } as const
+
+/** Same realistic terrain as the game, leveled flat under the walkable circle. */
+function createHomeMapLayer(): MarsMapLayer {
+  const flatCells = getFlatZoneTiles().map(({ x, z }) => ({
+    cellX: HOME_MAP_ORIGIN_CELL.cellX + x,
+    cellY: HOME_MAP_ORIGIN_CELL.cellY + z,
+  }))
+  return new MarsMapLayer({ originCell: HOME_MAP_ORIGIN_CELL, initialBaseCells: flatCells })
+}
 
 function disposeSceneGeometries(scene: THREE.Scene): void {
   const geometries = new Set<THREE.BufferGeometry>()
@@ -134,7 +152,8 @@ export default function MarsHomeScene() {
     sunLight.shadow.camera.bottom = -SHADOW_HALF_EXTENT
     scene.add(sunLight)
 
-    scene.add(createMarsTerrain(), createMarsBase())
+    const mapLayer = createHomeMapLayer()
+    scene.add(mapLayer.object, createMarsBase())
 
     const rover = createRover()
     scene.add(rover)
@@ -198,10 +217,11 @@ export default function MarsHomeScene() {
       window.cancelAnimationFrame(frameId)
       input.dispose()
       resizeObserver.disconnect()
-      // The astronauts own their geometries and materials, so they are released separately
-      scene.remove(player.object, companion.root)
+      // The astronauts and the terrain own their resources, so they are released separately
+      scene.remove(player.object, companion.root, mapLayer.object)
       player.dispose()
       companion.dispose()
+      mapLayer.dispose()
       disposeSceneGeometries(scene)
       renderer.dispose()
       renderer.domElement.remove()
