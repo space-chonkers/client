@@ -1,0 +1,248 @@
+/*
+ * Top-right mission minimap. The frame matches the dark HUD panels
+ * (ResourceBar, ActionButtons); the map inside uses warm Martian tones with
+ * teal base cells, golden sites and a white player arrow. Pending and completed
+ * sites differ by shape (diamond vs. disc with a checkmark), not only color.
+ */
+.mission-minimap {
+  /*
+   * Above 900px the hazard banner sits top-centre and is up to 560px wide, so
+   * the map only grows into the space to its right (half the leftover width
+   * minus the 16px screen gutter and a 16px gap).
+   */
+  --minimap-width: min(240px, calc(50vw - 280px - 32px));
+
+  width: var(--minimap-width);
+  padding: 10px 10px 12px;
+  background: rgba(16, 22, 34, 0.88);
+  border: 1px solid #334155;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: #f8fafc;
+  font-family: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mission-minimap__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 2px 8px;
+}
+
+.mission-minimap__title {
+  margin: 0;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mission-minimap__north {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.mission-minimap__north svg {
+  width: 8px;
+  height: 10px;
+  fill: currentColor;
+}
+
+.mission-minimap__map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Terrain (stylized, not measured topography) ---------- */
+
+.mission-minimap__crater circle {
+  fill: rgba(92, 34, 18, 0.32);
+}
+
+.mission-minimap__crater .mission-minimap__crater-floor {
+  fill: rgba(255, 196, 150, 0.1);
+}
+
+.mission-minimap__grid-line,
+.mission-minimap__sector-line,
+.mission-minimap__world-border {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.mission-minimap__grid-line {
+  stroke: rgba(255, 236, 220, 0.09);
+  stroke-width: 1px;
+}
+
+.mission-minimap__sector-line {
+  stroke: rgba(255, 236, 220, 0.22);
+  stroke-width: 1px;
+}
+
+.mission-minimap__world-border {
+  stroke: rgba(255, 236, 220, 0.45);
+  stroke-width: 1.5px;
+}
+
+/* ---------- Base ---------- */
+
+.mission-minimap__base-cell {
+  fill: #3fd0c4;
+  stroke: #0a5f61;
+  stroke-width: 0.12;
+}
+
+.mission-minimap__stash rect {
+  fill: #fff6ef;
+  stroke: #101622;
+  stroke-width: 0.22;
+}
+
+.mission-minimap__stash-light {
+  fill: #ff595e;
+}
+
+/* ---------- Investigation sites ---------- */
+
+.mission-minimap__site--pending path {
+  fill: #ffc93c;
+  stroke: #3d2408;
+  stroke-width: 0.3;
+  stroke-linejoin: round;
+}
+
+.mission-minimap__site-core {
+  fill: #3d2408;
+}
+
+.mission-minimap__site--completed circle {
+  fill: #fff6ef;
+  stroke: #0a5f61;
+  stroke-width: 0.3;
+}
+
+.mission-minimap__site-check {
+  fill: none;
+  stroke: #0a5f61;
+  stroke-width: 0.34;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Player ---------- */
+
+/* Eases between the ~10 Hz position updates so the marker glides instead of jumping. */
+.mission-minimap__player {
+  transition: transform 120ms linear;
+}
+
+.mission-minimap__player-arrow {
+  fill: #ffffff;
+  stroke: #101622;
+  stroke-width: 0.32;
+  stroke-linejoin: round;
+}
+
+/* ---------- Objective progress ---------- */
+
+.mission-minimap__footer {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 2px 0;
+}
+
+.mission-minimap__progress-label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffc93c;
+}
+
+.mission-minimap__progress-count {
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mission-minimap__progress-track {
+  height: 8px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mission-minimap__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #ffc93c;
+  transition: width 180ms ease-out;
+}
+
+/* Below 900px the hazard banner moves to the bottom; the map shares the top row with the ResourceBar. */
+@media (max-width: 900px) {
+  .mission-minimap {
+    /* 268px = ResourceBar (16px gutter + 220px panel) + 16px gap + 16px right gutter. */
+    --minimap-width: clamp(120px, calc(100vw - 268px), 220px);
+  }
+}
+
+/* Compact chrome so the map itself keeps most of the space on phones. */
+@media (max-width: 480px) {
+  .mission-minimap {
+    padding: 8px 8px 9px;
+    border-radius: 12px;
+  }
+
+  .mission-minimap__header {
+    margin-bottom: 6px;
+  }
+
+  .mission-minimap__title {
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+  }
+
+  .mission-minimap__north {
+    padding: 0 5px;
+    font-size: 0.65rem;
+  }
+
+  .mission-minimap__footer {
+    grid-template-columns: auto auto;
+    gap: 6px;
+    margin-top: 7px;
+  }
+
+  .mission-minimap__progress-track {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mission-minimap__player,
+  .mission-minimap__progress-fill {
+    transition: none;
+  }
+}

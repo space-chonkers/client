@@ -30,7 +30,7 @@ src/
 
 ### Architectural Responsibilities
 - `ResourceBar.tsx` is a pure presentational HUD component that merges `DEFAULT_SIMULATED_RESOURCES` with optional `values` props, computes clamped fill percentages against `MAX_RESOURCE_CAPACITY`, and renders each row with `<GameIcon />`, a progress track/fill, and the numeric value.
-- `resourceBar.css` positions the HUD panel in the top-left corner of `.player-sandbox` without intercepting 3D canvas pointer events outside the panel itself.
+- `resourceBar.css` positions the HUD panel in the top-left corner of `.player-sandbox` without intercepting 3D canvas pointer events outside the panel itself. The panel look (translucent dark background with blur, border, radius, padding, shadow, text color) comes from the shared `--hud-panel-*` / `--hud-text` tokens in `theme.css`, also used by `ActionButtons` and `HazardOngoingLabel`.
 - `PlayerSandboxView.tsx` mounts `<ResourceBar />` alongside the Three.js `.player-sandbox__canvas` container.
 
 ## 3. Implementation Details

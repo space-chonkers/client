@@ -23,6 +23,13 @@ export interface CorridorOrientation {
   rotationY: number
 }
 
+/** Read-only view of an occupied tile in local grid coordinates. */
+export interface OccupiedTile {
+  readonly gridX: number
+  readonly gridZ: number
+  readonly kind: ConstructionKind
+}
+
 interface StoredTile {
   kind: ConstructionKind
   group: THREE.Group
@@ -34,6 +41,8 @@ export const WALL_COLLISION_OFFSET = 0.12
 const STASH_COLLISION_HALF = 0.46
 /** Speed at which the player slides around a corner pillar into an open doorway. */
 const CORNER_SLIDE_SPEED = 3.2
+/** Downward foundation skirt height so corridors stay grounded over craters and dips. */
+const PLINTH_HEIGHT = 0.85
 
 const NEIGHBOR_OFFSETS: ReadonlyArray<{
   side: CardinalSide
@@ -113,6 +122,11 @@ function toTileKey(gridX: number, gridZ: number): string {
   return `${Math.round(gridX)},${Math.round(gridZ)}`
 }
 
+function fromTileKey(key: string): { gridX: number; gridZ: number } {
+  const [gridX, gridZ] = key.split(',').map(Number)
+  return { gridX, gridZ }
+}
+
 function moveToward(current: number, target: number, maxStep: number): number {
   const diff = target - current
   if (Math.abs(diff) <= maxStep) return target
@@ -140,6 +154,14 @@ function disposeGroup(group: THREE.Group): void {
 export class CorridorGrid {
   readonly object = new THREE.Group()
   private readonly tiles = new Map<string, StoredTile>()
+  private readonly occupancyListeners = new Set<() => void>()
+  private readonly plinths = new Map<string, THREE.Mesh>()
+  private readonly plinthGeo = new THREE.BoxGeometry(0.96, PLINTH_HEIGHT, 0.96)
+  private readonly plinthMat = new THREE.MeshStandardMaterial({
+    color: '#2b3446',
+    roughness: 0.75,
+    metalness: 0.25,
+  })
 
   constructor() {
     this.object.name = 'CorridorGrid'
@@ -152,6 +174,20 @@ export class CorridorGrid {
 
   getTileKind(gridX: number, gridZ: number): ConstructionKind | undefined {
     return this.tiles.get(toTileKey(gridX, gridZ))?.kind
+  }
+
+  /** Snapshot of every occupied tile; later changes do not affect the returned array. */
+  getOccupiedTiles(): OccupiedTile[] {
+    return Array.from(this.tiles, ([key, tile]) => ({ ...fromTileKey(key), kind: tile.kind }))
+  }
+
+  /**
+   * Calls `listener` after tiles are added or removed (never for rejected
+   * placements or removals). Returns a function that unsubscribes it.
+   */
+  onOccupancyChange(listener: () => void): () => void {
+    this.occupancyListeners.add(listener)
+    return () => this.occupancyListeners.delete(listener)
   }
 
   /** Places a corridor tile at (gridX, gridZ) and updates adjacent neighbor walls. */
@@ -167,6 +203,7 @@ export class CorridorGrid {
 
     this.tiles.set(key, { kind, group: new THREE.Group() })
     this.refreshTileAndNeighbors(x, z)
+    this.notifyOccupancyChange()
     return true
   }
 
@@ -195,6 +232,7 @@ export class CorridorGrid {
     for (const [x, z] of added) {
       this.rebuildTileMesh(x, z)
     }
+    if (added.length > 0) this.notifyOccupancyChange()
   }
 
   /** Removes a corridor tile at (gridX, gridZ) and updates adjacent neighbor walls. */
@@ -209,9 +247,16 @@ export class CorridorGrid {
     disposeGroup(existing.group)
     this.tiles.delete(key)
 
+    const plinth = this.plinths.get(key)
+    if (plinth) {
+      this.object.remove(plinth)
+      this.plinths.delete(key)
+    }
+
     for (const { dx, dz } of NEIGHBOR_OFFSETS) {
       this.rebuildTileMesh(x + dx, z + dz)
     }
+    this.notifyOccupancyChange()
     return true
   }
 
@@ -322,7 +367,18 @@ export class CorridorGrid {
       this.object.remove(tile.group)
       disposeGroup(tile.group)
     }
+    for (const plinth of this.plinths.values()) {
+      this.object.remove(plinth)
+    }
     this.tiles.clear()
+    this.occupancyListeners.clear()
+  }
+
+  private notifyOccupancyChange(): void {
+    for (const listener of this.occupancyListeners) listener()
+    this.plinths.clear()
+    this.plinthGeo.dispose()
+    this.plinthMat.dispose()
   }
 
   private refreshTileAndNeighbors(x: number, z: number): void {
@@ -365,5 +421,14 @@ export class CorridorGrid {
 
     this.tiles.set(key, { kind: existing.kind, group: segment })
     this.object.add(segment)
+
+    if (!this.plinths.has(key)) {
+      const plinth = new THREE.Mesh(this.plinthGeo, this.plinthMat)
+      plinth.position.set(x, -PLINTH_HEIGHT / 2, z)
+      plinth.castShadow = true
+      plinth.receiveShadow = true
+      this.plinths.set(key, plinth)
+      this.object.add(plinth)
+    }
   }
 }

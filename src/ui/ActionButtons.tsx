@@ -1,7 +1,11 @@
 import React, { useEffect } from 'react'
 import { GameIcon, ICON_COLORS, type ConstructionEventIconType } from './icons/GameIcons'
-import './chunkyButton.css'
 import './actionButtons.css'
+
+/** Matches the default icon size of the ResourceBar HUD panel. */
+const ACTION_ICON_SIZE = 28
+
+import './chunkyButton.css'
 
 export interface ActionButtonsProps {
   /** Called when the player builds (Build button, `E` or `Space`). */
@@ -89,7 +93,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
             <button
               key={type}
               type="button"
-              className={`chunky-button action-buttons__button action-buttons__button--${type}`}
+              className={`action-buttons__button action-buttons__button--${type}`}
               style={{ '--action-accent': ICON_COLORS[type] } as React.CSSProperties}
               disabled={!enabled}
               aria-disabled={!enabled}
@@ -102,7 +106,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
                 event.currentTarget.blur()
               }}
             >
-              <GameIcon type={type} size={32} />
+              <GameIcon type={type} size={ACTION_ICON_SIZE} />
               <span className="action-buttons__label">{label}</span>
               <span className="action-buttons__keys">
                 {keyHints.map((hint) => (

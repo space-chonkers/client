@@ -5,7 +5,7 @@
 `ActionButtons` renders the two in-game actions, `Build` and `Collect`, as a vertical panel in the bottom-left corner of the HUD, styled like the `ResourceBar`. Each action can be triggered by clicking its button or with a keyboard shortcut. The component only reports intents; it holds no resource logic. In the player sandbox, a temporary simulator updates the values shown in the `ResourceBar`.
 
 ### Objectives
-- Provide `Build` (`E` / `Space`) on top and `Collect` (`Q` / `C`) below, using `<GameIcon />` and the existing `.chunky-button` base.
+- Provide `Build` (`E` / `Space`) on top and `Collect` (`Q` / `C`) below, as flat rows with `<GameIcon />`, like the `ResourceBar` rows.
 - Support keyboard shortcuts (`E` / `Space` for Build, `Q` / `C` for Collect) through a single `window` listener.
 - Let a click on `Build` also reach scene code that listens for the build key.
 - Dim (never hide) unavailable actions through `buildEnabled` / `collectEnabled`.
@@ -25,7 +25,7 @@ src/
     ├── ActionButtons.tsx
     ├── actionButtons.css
     ├── simulatedResources.ts   (TEMPORARY)
-    ├── chunkyButton.css
+    ├── theme.css               (shared --hud-panel-* tokens)
     ├── ResourceBar.tsx
     └── icons/
         └── GameIcons.tsx
@@ -33,7 +33,7 @@ src/
 
 ### Architectural Responsibilities
 - `ActionButtons.tsx` is presentational. It exposes `onBuild` / `onCollect` callbacks and owns the keyboard listener.
-- `actionButtons.css` positions the overlay and restyles `.chunky-button` to match the ResourceBar panel.
+- `actionButtons.css` positions the overlay and styles the panel and its flat button rows with the shared HUD panel tokens.
 - `simulatedResources.ts` is a TEMPORARY simulator that must be replaced by authoritative server state once the backend is connected.
 - `PlayerSandboxView.tsx` owns the resource state and passes it to `<ResourceBar values={resources} />`.
 
@@ -67,9 +67,9 @@ export interface ActionButtonsProps {
 ```
 
 ### Styling
-- The `.action-buttons` panel reuses the ResourceBar look: `rgba(16, 22, 34, 0.88)` background, `1px solid #334155` border, rounded corners, soft shadow and `backdrop-filter: blur(6px)`.
-- The cream `.chunky-button` fill is replaced by a dark slate fill so the icon colors stay readable. Each button has a 3px bottom accent border in its icon color (`ICON_COLORS[type]`, passed as the `--action-accent` CSS variable).
-- Hover lifts the button, pressed pushes it down, and `:focus-visible` shows a light outline.
+- The `.action-buttons` panel uses the shared HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`), like `ResourceBar` and `HazardOngoingLabel`: translucent `rgba(16, 22, 34, 0.6)` background with `blur(3px)` so the map shows through, `1px solid #334155` border, rounded corners and soft shadow.
+- Buttons are flat rows (no own box or border), 8 px apart (`--action-row-gap`), with a thin 1 px divider in `--hud-panel-border` centered in that gap so the space above and below it is equal: 28 px icon, label, keycap hints. The label is uppercase in the button's icon color (`ICON_COLORS[type]`, passed as `--action-accent`), like the hazard title in `HazardOngoingLabel`.
+- Hover and pressed show a subtle light highlight on the row; `:focus-visible` shows a light outline.
 - The overlay uses `pointer-events: none`; `.action-buttons` and its buttons use `pointer-events: auto`.
 
 ## 4. Business Logic
@@ -143,7 +143,6 @@ bun run build
 |---|---|
 | `react` | Component rendering and effects |
 | `./icons/GameIcons` | `<GameIcon />`, `ICON_COLORS` for `build` and `collect` |
-| `./chunkyButton.css` | Base button style (restyled in `actionButtons.css`) |
 | `./ResourceBar` | Simulated defaults, capacity and values type |
 
 ## 13. Known Limitations
@@ -169,3 +168,4 @@ bun run build
 | 2026-11-15 | 1.0.0 | Initial implementation of Build and Collect action buttons |
 | 2026-11-15 | 1.1.0 | Bottom-left stacked layout, ResourceBar-style panel, availability states, temporary simulator module |
 | 2026-11-15 | 1.2.0 | Added `Q` shortcut for Collect and dual keycap hints (`E` / `Space`, `Q` / `C`) |
+| 2026-11-15 | 1.3.0 | Flat rows without `.chunky-button`, shared translucent HUD panel tokens with `ResourceBar` and `HazardOngoingLabel` |

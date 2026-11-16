@@ -8,7 +8,7 @@
 
 ### Scope
 
-Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene) with a "Back to home" button. The chosen mode is not used by the sandbox yet, except that **Solo** fires a test hazard warning (see `docs/hazard_alert.md`).
+Includes the scene, the controllable character, the mode menu, the music control and the browser tab icon. It does **not** include gameplay: after choosing a mode, `App` mounts `PlayerSandboxView` (the player test scene). The chosen mode is not used by the sandbox yet, except that **Solo** fires a test hazard warning (see `docs/hazard_alert.md`).
 
 ## 1. Architecture
 
@@ -78,7 +78,7 @@ src/
 ### Modes
 
 - Solo: 1 player. Co-op: up to 4 players (stated in each button's accessible label).
-- Picking **Solo** also sends a random hazard code (1–4) to `useHazardAlert` as a temporary test trigger. "Back to home" calls `dismiss()`, which clears the banner and the "in progress" label and stops the alarm.
+- Picking **Solo** also sends a random hazard code (1–4) to `useHazardAlert` as a temporary test trigger. The mission screen has no "Back to home" button; leaving the co-op lobby calls `goHome`, which runs `dismiss()` (clears the banner and the "in progress" label and stops the alarm).
 - Nothing is persisted (no saves, volume or mode).
 
 ## 4. Dependencies
