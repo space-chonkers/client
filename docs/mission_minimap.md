@@ -36,7 +36,9 @@ src/
 ├── game/
 │   ├── PlayerSandbox.ts           # Publishes construction + player snapshots (world cells)
 │   ├── corridor/CorridorGrid.ts   # Source of truth for construction occupancy
-│   └── minimap/missionMap.ts      # Types, coordinate helpers, objective progress (pure)
+│   └── minimap/
+│       ├── missionMap.ts          # Types, coordinate helpers, objective progress (pure)
+│       └── PlayerSnapshotStore.ts # Latest player snapshot, read by the marker via useSyncExternalStore
 └── ui/
     ├── MissionMinimap.tsx         # SVG presentation component
     └── missionMinimap.css
@@ -46,9 +48,10 @@ src/
 |---|---|
 | `CorridorGrid` | Owns occupancy. Exposes `getOccupiedTiles()` (copied snapshot, local coordinates) and `onOccupancyChange(listener)` (fires only when tiles are actually added or removed). |
 | `PlayerSandbox` | Accepts optional `PlayerSandboxListeners`. Converts occupancy (`occupiedTilesToConstructions`) and player position (`sandboxToWorldCell`) to world cells and calls `onConstructionsChange` / `onPlayerChange`. |
-| `PlayerSandboxView` | Holds `constructions` and `player` in React state (the setters are the callbacks), passes them with the payload's grid and investigation sites to `MissionMinimap`, and disposes the sandbox on unmount. Also renders the top-right HUD column, where an optional `topRightStatus` (the hazard "in progress" label) sits under the minimap. |
+| `PlayerSandboxView` | Holds `constructions` in React state (`setConstructions` is the callback) and owns a `PlayerSnapshotStore` (`playerStore.set` is the player callback). Passes both, with the payload's grid and investigation sites, to `MissionMinimap`, and disposes the sandbox on unmount. Also renders the top-right HUD column, where an optional `topRightStatus` (the hazard "in progress" label) sits under the minimap. |
 | `MissionMinimap` | Pure presentation: renders the props as SVG. |
 | `missionMap.ts` | Shared types and pure helpers, unit tested. |
+| `PlayerSnapshotStore` | Keeps the latest player snapshot outside React state. Exposes `getSnapshot` / `subscribe` (`MissionMapPlayerSource`) for `useSyncExternalStore` and `set` for the sandbox; skips notifying when the same snapshot is set again. |
 
 No global store, event bus or second Three.js scene is involved.
 
@@ -82,13 +85,14 @@ This matches the server spawn format (slot 0 is `{ x: 29.5, y: 24.5 }`). Base ce
 | Grid size | `INITIAL_SERVER_PAYLOAD.grid` | Static |
 | Investigation sites | `INITIAL_SERVER_PAYLOAD.investigation` | Static |
 | Constructions | `CorridorGrid` occupancy → `onConstructionsChange` | On start (initial 3×3 load) and after every successful `placeTile` / `removeTile` |
-| Player | `Player.position` + `Player.facing` → `onPlayerChange` | On start, then at most every 0.1 s (~10 Hz) when the position moved ≥ 0.01 cells or the facing changed |
+| Player | `Player.position` + `Player.facing` → `onPlayerChange` → `PlayerSnapshotStore` | On start, then every 0.1 s on average (~10 Hz; the timer carries its overshoot) when the position moved ≥ 0.01 cells or the facing changed |
 
 Construction state is never derived from meshes or button clicks: a rejected or duplicate `E`/`Space` placement does not reach `onOccupancyChange`, so the minimap does not change.
 
 ### Rendering cost
 - When the player stands still, the sandbox sends nothing and React does not re-render.
-- Terrain, base and sites are `memo` sub-components, so 10 Hz player updates only re-render the player marker. Grid lines are two `<path>` elements.
+- Player updates go into `PlayerSnapshotStore`, not React state. Only `MinimapPlayer` subscribes (`useSyncExternalStore`), so ~10 Hz updates re-render just the marker; `PlayerSandboxView`, `ResourceBar`, `ActionButtons` and the rest of `MissionMinimap` stay untouched (verified in the browser by counting renders while walking).
+- Terrain, base and sites are `memo` sub-components, so they only re-render when constructions change. Grid lines are two `<path>` elements.
 - The marker eases between updates with a 120 ms CSS `transform` transition (disabled with `prefers-reduced-motion`). Rotation snaps to the new facing to avoid spinning the long way round.
 
 ## 5. Objective Completion
@@ -105,8 +109,10 @@ Any construction kind counts (`base_tile` or `stash`). Sites outside the grid ar
 ## 6. Layout
 
 - Top-right, 16 px from the edges, in `.player-sandbox__top-right` (a column that also stacks the hazard "in progress" label under the map).
-- Width `min(240px, 50vw − 312px)` above 900 px, so the map never reaches the 560 px top-centre hazard banner (the full 240 px from 1104 px wide).
-- At 900 px and below (the banner moves to the bottom), `clamp(120px, 100vw − 268px, 220px)` keeps it beside the 220 px `ResourceBar`. Below 480 px the frame chrome gets more compact.
+- Above 900 px the width is a fixed 240 px. The top-centre hazard banner narrows instead (`min(560px, 100% − 2 × 272px)`), so it always fits between the ResourceBar and the minimap.
+- At 900 px and below (the banner moves to the bottom), `clamp(120px, 100vw − 268px, 240px)` keeps it beside the 220 px `ResourceBar`; the width is continuous across 900/901 px.
+- Below 388 px there is no room beside the ResourceBar, so the column moves under it (`top: 226px`, assuming the 198 px-tall five-row ResourceBar) and the map keeps its 120 px minimum. Below 480 px the frame chrome gets more compact.
+- Verified without overlaps at 320×568, 320×640, 360, 390, 900, 901, 1000 and 1280 px wide (with the hazard banner visible from 900 px).
 - `pointer-events: none`: the map never blocks the scene or input.
 
 ## 7. API, Configuration and Security
@@ -117,7 +123,7 @@ No network APIs, environment variables or credentials are used. All data comes f
 
 | Scenario | Behavior |
 |---|---|
-| No player snapshot yet | Player marker is not drawn. |
+| No player source, or no snapshot yet | Player marker is not drawn. |
 | No constructions / no sites | Empty map; progress shows `0 / 0` with an empty bar. |
 | Construction or site outside the grid | Not drawn (sites are not counted). |
 | Player outside the grid | Marker is clamped to the map edge. |
@@ -129,7 +135,8 @@ No network APIs, environment variables or credentials are used. All data comes f
 - `missionMap.test.ts`: sandbox → world and world → minimap conversion, spawn alignment, clamping, grid boundaries, facing rotation, objective completion and counts, empty and out-of-grid data.
 - `corridorGridOccupancy.test.ts`: initial 3×3 base and Stash, snapshot copies, notifications for placement, duplicates, removal, protected Stash, unsubscribe and dispose.
 - `minimapConstructionSync.test.tsx`: integration of a real `CorridorGrid` wired like `PlayerSandbox` → published world constructions → objective progress → rendered minimap. Covers the initial base, completing a mock-payload objective by placing a tile on its cell, adjacent tiles not completing it, duplicates publishing nothing, removal reverting the objective, and no publishing after dispose. The mock objectives are not modified.
-- `MissionMinimap.test.tsx`: static render of base cells, Stash position, construction add/remove, pending/completed sites, progress, player position/rotation/clamping and empty data.
+- `MissionMinimap.test.tsx`: static render of base cells, Stash position, construction add/remove, pending/completed sites, progress and its ARIA range (0–100 with a text value, valid even with 0 sites), the map label counting only drawn cells, player position/rotation/clamping, a missing player source and empty data.
+- `playerSnapshotStore.test.ts`: latest snapshot, notifications (none for a repeated snapshot), unsubscribe, bound methods.
 
 ```bash
 bun test ./tests
@@ -145,6 +152,7 @@ bun run build
 - The sandbox only lets the player build inside a 19×19 local area (world cells 20–38 × 16–34). All mock investigation sites are outside it, so sites cannot be completed by playing yet; the completed state is covered by tests.
 - Only the local player is shown. Investigation sites and grid size come from the mock payload.
 - The background is decorative and does not represent real terrain.
+- On narrow phones the stacked layout assumes the five-row ResourceBar (198 px tall) and a viewport at least ~568 px tall; on shorter screens the minimap can touch the action buttons.
 
 ## 11. Future Integration with Match State
 

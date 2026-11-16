@@ -6,11 +6,10 @@
  */
 .mission-minimap {
   /*
-   * Above 900px the hazard banner sits top-centre and is up to 560px wide, so
-   * the map only grows into the space to its right (half the leftover width
-   * minus the 16px screen gutter and a 16px gap).
+   * Fixed above 900px; the top-centre hazard banner narrows to fit between the
+   * HUD side panels instead (see hazardAlertBanner.css).
    */
-  --minimap-width: min(240px, calc(50vw - 280px - 32px));
+  --minimap-width: 240px;
 
   width: var(--minimap-width);
   padding: 10px 10px 12px;
@@ -203,8 +202,11 @@
 /* Below 900px the hazard banner moves to the bottom; the map shares the top row with the ResourceBar. */
 @media (max-width: 900px) {
   .mission-minimap {
-    /* 268px = ResourceBar (16px gutter + 220px panel) + 16px gap + 16px right gutter. */
-    --minimap-width: clamp(120px, calc(100vw - 268px), 220px);
+    /*
+     * Shares the top row with the ResourceBar. 268px = 16px gutter + 220px panel
+     * + 16px gap + 16px right gutter; capped at 240px so 900px → 901px is seamless.
+     */
+    --minimap-width: clamp(120px, calc(100vw - 268px), 240px);
   }
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { INITIAL_SERVER_PAYLOAD } from './game/corridor/mockServerPayload'
-import type { MissionMapConstruction, MissionMapPlayer } from './game/minimap/missionMap'
+import type { MissionMapConstruction } from './game/minimap/missionMap'
+import { PlayerSnapshotStore } from './game/minimap/PlayerSnapshotStore'
 import { PlayerSandbox } from './game/PlayerSandbox'
 import { ActionButtons } from './ui/ActionButtons'
 import { MissionMinimap } from './ui/MissionMinimap'
@@ -27,7 +28,9 @@ export default function PlayerSandboxView({ topRightStatus }: PlayerSandboxViewP
   const containerRef = useRef<HTMLDivElement>(null)
   const [resources, setResources] = useState<ResourceBarValues>({ ...DEFAULT_SIMULATED_RESOURCES })
   const [constructions, setConstructions] = useState<ReadonlyArray<MissionMapConstruction>>([])
-  const [player, setPlayer] = useState<MissionMapPlayer | null>(null)
+  // Player updates arrive at ~10 Hz; keeping them out of this component's state
+  // means only the minimap's player marker re-renders, not the whole HUD.
+  const [playerStore] = useState(() => new PlayerSnapshotStore())
 
   const handleBuild = useCallback(
     () => setResources((current) => applyResourceDelta(current, SIMULATED_BUILD_COST, -1)),
@@ -44,10 +47,10 @@ export default function PlayerSandboxView({ topRightStatus }: PlayerSandboxViewP
 
     const sandbox = new PlayerSandbox(container, {
       onConstructionsChange: setConstructions,
-      onPlayerChange: setPlayer,
+      onPlayerChange: playerStore.set,
     })
     return () => sandbox.dispose()
-  }, [])
+  }, [playerStore])
 
   return (
     <div className="player-sandbox">
@@ -58,7 +61,7 @@ export default function PlayerSandboxView({ topRightStatus }: PlayerSandboxViewP
           grid={INITIAL_SERVER_PAYLOAD.grid}
           constructions={constructions}
           investigation={INITIAL_SERVER_PAYLOAD.investigation}
-          player={player}
+          player={playerStore}
         />
         {topRightStatus}
       </div>

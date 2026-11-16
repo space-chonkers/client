@@ -44,7 +44,6 @@ function renderMinimap(constructions: ReadonlyArray<MissionMapConstruction>): st
       grid={INITIAL_SERVER_PAYLOAD.grid}
       constructions={constructions}
       investigation={INITIAL_SERVER_PAYLOAD.investigation}
-      player={null}
     />,
   )
 }
