@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { MarsTerrainDataV1 } from '../terrain-kit/marsTerrainContract'
 import { CorridorGrid, type ConstructionPayload } from './corridor/CorridorGrid'
 import {
   INITIAL_BASE_ORIGIN,
@@ -68,6 +69,14 @@ interface RemotePlayerEntry {
   walkPhase: number
 }
 
+/** Layer −1 source for the scene. Omitted fields keep the procedural default (seed 42). */
+export interface PlayerSandboxTerrainOptions {
+  /** Real HiRISE elevation, already fetched and validated. */
+  terrainData?: MarsTerrainDataV1
+  /** Procedural seed, used when `terrainData` is omitted. */
+  terrainSeed?: number
+}
+
 /**
  * Playable sandbox scene: astronaut (Layer 1), corridor grid (Layer 0),
  * 50x50 Martian terrain (Layer -1), follow camera, and lighting.
@@ -82,6 +91,8 @@ export class PlayerSandbox {
 
   private stashCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
   private terrainOriginCell: { cellX: number; cellY: number } = { ...INITIAL_BASE_ORIGIN }
+  /** Kept so terrain rebuilt for a new server origin uses the same source. */
+  private readonly terrain: PlayerSandboxTerrainOptions
   private readonly minedTerrainCells = new Set<string>()
   private readonly remotes = new Map<string, RemotePlayerEntry>()
   private lastConstructionsKey = ''
@@ -113,7 +124,17 @@ export class PlayerSandbox {
   constructor(
     private readonly container: HTMLElement,
     private readonly listeners: PlayerSandboxListeners = {},
+    terrain: PlayerSandboxTerrainOptions = {},
   ) {
+    this.terrain = terrain
+    // Layer -1: 50x50 playable Martian terrain (+ border margin) aligned with CorridorGrid.
+    // Built before the renderer so a terrain that fails to build leaves nothing attached to the page.
+    this.mapLayer = new MarsMapLayer({
+      ...this.terrainSource(),
+      originCell: INITIAL_BASE_ORIGIN,
+      initialBaseCells: INITIAL_SERVER_CONSTRUCTIONS,
+    })
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -135,11 +156,6 @@ export class PlayerSandbox {
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload.
     // Subscribed first so the initial load is published like any later change.
     this.corridors.onOccupancyChange(this.publishConstructions)
-    // Layer -1: 50x50 playable Martian terrain (+ border margin) aligned with CorridorGrid
-    this.mapLayer = new MarsMapLayer({
-      originCell: INITIAL_BASE_ORIGIN,
-      initialBaseCells: INITIAL_SERVER_CONSTRUCTIONS,
-    })
     this.scene.add(this.mapLayer.object)
 
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload
@@ -312,11 +328,15 @@ export class PlayerSandbox {
     ) {
       this.scene.remove(this.mapLayer.object)
       this.mapLayer.dispose()
-      this.mapLayer = new MarsMapLayer({ originCell: origin, initialBaseCells: constructions })
+      this.mapLayer = new MarsMapLayer({ ...this.terrainSource(), originCell: origin, initialBaseCells: constructions })
       this.scene.add(this.mapLayer.object)
       this.terrainOriginCell = { ...origin }
       this.minedTerrainCells.clear()
-      for (const item of constructions) this.minedTerrainCells.add(`${item.cellX},${item.cellY}`)
+      for (const item of constructions) {
+        this.minedTerrainCells.add(`${item.cellX},${item.cellY}`)
+        // Real terrain draws measured metres, which relief levelling cannot flatten: mine the base on the mesh.
+        if (this.mapLayer.isRealTerrain) this.mapLayer.mineCell(item.cellX - origin.cellX, item.cellY - origin.cellY)
+      }
       return
     }
 
@@ -326,6 +346,11 @@ export class PlayerSandbox {
       this.mapLayer.mineCell(item.cellX - origin.cellX, item.cellY - origin.cellY)
       this.minedTerrainCells.add(key)
     }
+  }
+
+  /** `MarsMapLayer` options for this scene's terrain source. */
+  private terrainSource(): { terrainData?: MarsTerrainDataV1; seed?: number } {
+    return { terrainData: this.terrain.terrainData, seed: this.terrain.terrainSeed }
   }
 
   private readonly tick = (now: number) => {

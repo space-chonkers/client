@@ -1,7 +1,9 @@
 # Mars Terrain Contract (proposed v1)
 
-**Status:** proposal. The client can consume this payload today; no backend
-serves it yet. Decided for v1: seed ownership (§2), the horizontal convention
+**Status:** proposal. The backend serves this payload at
+`GET /v1/mars-terrain/{seed}` (server `internal/terrain`), and the client fetches
+it with `fetchMarsTerrain` for the mission (see [map_integration.md](map_integration.md))
+and the development terrain showcase. Decided for v1: seed ownership (§2), the horizontal convention
 (§3) and NoData rejection (§4). Three backend decisions remain open (§9): the
 datum, the resampling method, and transport and errors. Field names still need
 the backend team's agreement before Phase 4B.
@@ -322,8 +324,13 @@ cover every other part of the payload.
   - Caching.
   - The HTTP status codes and error body for cases such as "no DTM coverage at
     this location", "invalid request" and "upstream unavailable".
-- **Client today:** has no network code for this contract, so nothing calls
-  `createReliefMapFromMarsTerrain` yet. `MarsTerrainDataError` is the client's
+- **Client today:** `fetchMarsTerrain(seed)` (`src/terrain-kit/marsTerrainApi.ts`)
+  calls `GET {baseUrl}/v1/mars-terrain/{seed}` for the mission and the development
+  showcase. It tells "unreachable" (`MarsTerrainRequestError` with `status: null`)
+  apart from an HTTP error status, but does not interpret status codes or error
+  bodies further. The mission treats every failure (and a timeout) the same way:
+  it starts on procedural terrain and says so; the showcase offers Retry.
+  `MarsTerrainDataError` is the client's
   own validation error for a payload it received. It is not a server error
   format, and the server shouldn't reuse it.
 - **Why it matters:** the client needs to tell "retry later" apart from "this

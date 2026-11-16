@@ -43,7 +43,7 @@
   left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 268px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 32px);
@@ -110,6 +110,12 @@
   color: #1c1220;
 }
 
+.showcase-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
 .showcase-toggle {
   display: flex;
   align-items: center;
@@ -173,4 +179,74 @@
   color: #f6e9dc;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Real Mars source */
+
+.mars-status {
+  margin: 0;
+  color: #e6d3c4;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mars-status-error {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgb(240 110 90 / 45%);
+  border-radius: 7px;
+  background: rgb(160 40 30 / 22%);
+}
+
+.mars-status-error p {
+  margin: 0;
+}
+
+.mars-source {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mars-source dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  margin: 0;
+}
+
+.mars-source dt {
+  color: #bfa99a;
+}
+
+.mars-source dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* HiRISE product IDs are long unbroken tokens: shown whole, wrapping only if they must. */
+.mars-product {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mars-note,
+.mars-details {
+  margin: 0;
+  color: #bfa99a;
+  font-size: 11px;
+}
+
+.mars-details summary {
+  cursor: pointer;
+}
+
+.mars-details p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }

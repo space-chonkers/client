@@ -4,6 +4,8 @@ import type { ReliefMap } from '../terrain-kit/reliefMap'
 /** Contracts shared by the showcase stage, its views and the control panel. */
 
 export type ViewMode = 'terrain' | 'assets'
+/** Where the Layer −1 map comes from: generated from the seed, or real HiRISE elevation the backend picks for it. */
+export type TerrainSource = 'procedural' | 'mars'
 export type CameraPreset = 'iso' | 'top' | 'front' | 'low'
 /** terrain: final render · relief: per-cell relief heatmap draped on it · data: raw cell values as columns. */
 export type RenderMode = 'terrain' | 'relief' | 'data'
@@ -34,8 +36,15 @@ export interface ShowcaseContent {
 
 export interface StageStats {
   fps: number
-  drawCalls: number
-  triangles: number
-  buildMs: number
-  info: Record<string, number | string>
+  /**
+   * Figures for the content on screen; `null` until the current content has
+   * been rendered, so nothing from a previous map shows while the stage is
+   * empty (loading, failed or cancelled).
+   */
+  content: {
+    drawCalls: number
+    triangles: number
+    buildMs: number
+    info: Record<string, number | string>
+  } | null
 }

@@ -55,6 +55,12 @@ export interface ElevationModel {
   readonly cellSizeMeters: number
   readonly normalization: ElevationScale
   readonly geo: GeoReference
+  /**
+   * Present on display maps that surround measured terrain with synthetic
+   * scenery (`createMarsTerrainScenery`): only the corners of these cells are
+   * measured, every other sample is generated. Absent: all samples are measured.
+   */
+  readonly measuredFootprint?: { readonly col: number; readonly row: number; readonly cols: number; readonly rows: number }
 }
 
 /**

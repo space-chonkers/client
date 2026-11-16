@@ -97,15 +97,35 @@ export function merge(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry 
   return merged
 }
 
+/** Vertices one child of the baked root occupies inside a baked mesh (`mesh.userData.bakedParts`). */
+export interface BakedPart {
+  /** Index in `root.children` of the object the vertices came from. */
+  owner: number
+  /** First vertex and vertex count in the merged `position` attribute. */
+  start: number
+  count: number
+}
+
 /**
  * Bakes every static, non-instanced mesh under `root` into one merged mesh per
  * (material, spatial key). Hundreds of props collapse into a handful of draw
  * calls while the key (e.g. a terrain chunk) keeps frustum culling useful.
- * Source geometries are disposed; materials are reused as-is.
+ * Source geometries are disposed; materials are reused as-is. Each baked mesh
+ * lists its `BakedPart`s in `userData.bakedParts`, so a single prop can still
+ * be edited after baking.
  */
 export function bakeStaticMeshes(root: THREE.Object3D, keyOf: (x: number, z: number) => string): THREE.Group {
   root.updateMatrixWorld(true)
-  const buckets = new Map<string, { material: THREE.Material; parts: THREE.BufferGeometry[]; castShadow: boolean; receiveShadow: boolean }>()
+  const owners = new Map(root.children.map((child, index) => [child, index]))
+  const ownerOf = (object: THREE.Object3D) => {
+    let top = object
+    while (top.parent && top.parent !== root) top = top.parent
+    return owners.get(top) ?? -1
+  }
+  const buckets = new Map<
+    string,
+    { material: THREE.Material; parts: THREE.BufferGeometry[]; owners: number[]; castShadow: boolean; receiveShadow: boolean }
+  >()
   const sources = new Set<THREE.BufferGeometry>()
   const origin = new THREE.Vector3()
   root.traverse((object) => {
@@ -114,17 +134,27 @@ export function bakeStaticMeshes(root: THREE.Object3D, keyOf: (x: number, z: num
     const key = `${object.material.uuid}|${keyOf(origin.x, origin.z)}`
     let bucket = buckets.get(key)
     if (!bucket) {
-      bucket = { material: object.material, parts: [], castShadow: object.castShadow, receiveShadow: object.receiveShadow }
+      bucket = { material: object.material, parts: [], owners: [], castShadow: object.castShadow, receiveShadow: object.receiveShadow }
       buckets.set(key, bucket)
     }
     bucket.parts.push(object.geometry.clone().applyMatrix4(object.matrixWorld))
+    bucket.owners.push(ownerOf(object))
     sources.add(object.geometry)
   })
   sources.forEach((geometry) => geometry.dispose())
 
   const baked = new THREE.Group()
-  buckets.forEach(({ material, parts, castShadow, receiveShadow }, key) => {
+  buckets.forEach(({ material, parts, owners: partOwners, castShadow, receiveShadow }, key) => {
+    // `merge` concatenates positions in order, so each part's range follows from the counts before it.
+    let start = 0
+    const bakedParts: BakedPart[] = parts.map((part, index) => {
+      const count = part.getAttribute('position').count
+      const range = { owner: partOwners[index], start, count }
+      start += count
+      return range
+    })
     const mesh = new THREE.Mesh(merge(parts), material)
+    mesh.userData.bakedParts = bakedParts
     mesh.name = `baked:${key.split('|')[1]}`
     mesh.castShadow = castShadow
     mesh.receiveShadow = receiveShadow

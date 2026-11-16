@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { INITIAL_SERVER_PAYLOAD } from './game/corridor/mockServerPayload'
+import { launchMission, resolveMissionTerrainConfig, type MissionTerrain } from './game/map/missionTerrain'
 import type { MissionMapConstruction } from './game/minimap/missionMap'
 import { PlayerSnapshotStore } from './game/minimap/PlayerSnapshotStore'
 import { PlayerSandbox } from './game/PlayerSandbox'
@@ -32,7 +33,30 @@ function sameValues<T extends object>(left: T, right: T): boolean {
   return (Object.keys(left) as (keyof T)[]).every((key) => left[key] === right[key])
 }
 
-/** Mounts the server-backed mission scene and its resource, minimap, and action HUDs. */
+/** One line naming the terrain on screen; a fallback is always announced, plain procedural only in development. */
+function TerrainSourceNote({ terrain }: { terrain: MissionTerrain }) {
+  if (terrain.source === 'mars') {
+    const { productId, datasetId, provider } = terrain.data.source
+    return (
+      <p className="mission-terrain-note" title={`${provider} · ${datasetId}`}>
+        Real Mars terrain · HiRISE {productId ?? datasetId}
+      </p>
+    )
+  }
+  if (terrain.fallbackReason) {
+    return (
+      <p className="mission-terrain-note mission-terrain-note--fallback" role="status">
+        Real Mars terrain unavailable ({terrain.fallbackReason}). Using procedural terrain.
+      </p>
+    )
+  }
+  return import.meta.env.DEV ? <p className="mission-terrain-note">Procedural terrain · seed {terrain.seed}</p> : null
+}
+
+/**
+ * Mounts the server-backed mission scene and its resource, minimap, and action HUDs.
+ * The scene is created once its Layer −1 terrain is resolved (see `launchMission`).
+ */
 export default function PlayerSandboxView({
   matchState,
   frame,
@@ -75,27 +99,44 @@ export default function PlayerSandboxView({
   })
   const [nearStash, setNearStash] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Terrain the scene was built from; `null` while it loads (the scene does not exist yet). */
+  const [terrain, setTerrain] = useState<MissionTerrain | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    const sandbox = new PlayerSandbox(container, {
-      onConstructionsChange: setFallbackConstructions,
-      onPlayerChange: playerStore.set,
+    const config = resolveMissionTerrainConfig({
+      dev: import.meta.env.DEV,
+      apiBaseUrl: import.meta.env.VITE_MARS_TERRAIN_API_URL,
+      search: window.location.search,
     })
-    sandbox.setInputCallback((move) => inputRef.current(move))
-    sandboxRef.current = sandbox
-    return () => {
-      sandbox.setInputCallback(null)
-      sandboxRef.current = null
-      sandbox.dispose()
-    }
+    // Stops a pending terrain request or disposes the scene on unmount (leaving the mission).
+    return launchMission(config, {
+      createScene: (missionTerrain) => {
+        const sandbox = new PlayerSandbox(
+          container,
+          { onConstructionsChange: setFallbackConstructions, onPlayerChange: playerStore.set },
+          missionTerrain.source === 'mars' ? { terrainData: missionTerrain.data } : { terrainSeed: missionTerrain.seed },
+        )
+        sandbox.setInputCallback((move) => inputRef.current(move))
+        sandboxRef.current = sandbox
+        return {
+          dispose: () => {
+            sandbox.setInputCallback(null)
+            sandboxRef.current = null
+            sandbox.dispose()
+          },
+        }
+      },
+      onTerrain: setTerrain,
+    })
   }, [playerStore])
 
+  // `terrain` is set once the scene exists, so rules that arrived while it loaded are applied then.
   useEffect(() => {
     if (welcome) sandboxRef.current?.setServerRules(welcome.tickRate, welcome.rules.playerSpeed)
-  }, [welcome])
+  }, [welcome, terrain])
 
   useEffect(() => {
     if (!lastBuild) return
@@ -150,7 +191,7 @@ export default function PlayerSandboxView({
     } else {
       setNearStash(false)
     }
-  }, [matchState, frame, playerId])
+  }, [matchState, frame, playerId, terrain])
 
   // Keep the HUD pools and stash sourced from the latest server snapshot.
   useEffect(() => {
@@ -230,9 +271,15 @@ export default function PlayerSandboxView({
           </span>
         </div>
       </div>
+      {!terrain && (
+        <p className="mission-terrain-loading" role="status">
+          Loading Martian terrain…
+        </p>
+      )}
       <div ref={containerRef} className="player-sandbox__canvas" aria-label="Astronaut player test scene" />
       <div className="player-sandbox__toasts">
         {notice && <p className="player-sandbox__toast" role="status">{notice}</p>}
+        {terrain && <TerrainSourceNote terrain={terrain} />}
       </div>
       {ended && (
         <div className="mission-ended-backdrop">
