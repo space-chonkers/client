@@ -1,24 +1,21 @@
 /*
- * Top-right mission minimap. The frame matches the dark HUD panels
- * (ResourceBar, ActionButtons); the map inside uses warm Martian tones with
- * teal base cells, golden sites and a white player arrow. Pending and completed
- * sites differ by shape (diamond vs. disc with a checkmark), not only color.
+ * Top-right mission minimap. The frame uses the shared HUD panel tokens
+ * (`--hud-panel-*`, theme.css) like the ResourceBar, ActionButtons and hazard
+ * label; the map inside uses warm Martian tones with teal base cells, golden
+ * sites and a white player arrow. Pending and completed sites differ by shape
+ * (diamond vs. disc with a checkmark), not only color.
+ * The width comes from the HUD column (`.player-sandbox__top-right`).
  */
 .mission-minimap {
-  /*
-   * Fixed above 900px; the top-centre hazard banner narrows to fit between the
-   * HUD side panels instead (see hazardAlertBanner.css).
-   */
-  --minimap-width: 240px;
-
-  width: var(--minimap-width);
-  padding: 10px 10px 12px;
-  background: rgba(16, 22, 34, 0.88);
-  border: 1px solid #334155;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  color: #f8fafc;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--hud-panel-padding);
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-panel-border);
+  border-radius: var(--hud-panel-radius);
+  box-shadow: var(--hud-panel-shadow);
+  backdrop-filter: var(--hud-panel-blur);
+  color: var(--hud-text);
   font-family: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
   pointer-events: none;
   user-select: none;
@@ -32,32 +29,14 @@
   margin: 0 2px 8px;
 }
 
+/* Same type as the other HUD labels (action buttons, hazard label). */
 .mission-minimap__title {
   margin: 0;
-  font-family: 'Fredoka', 'Nunito', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.mission-minimap__north {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 7px;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: rgba(15, 23, 42, 0.9);
-  font-size: 0.75rem;
-  font-weight: 900;
-}
-
-.mission-minimap__north svg {
-  width: 8px;
-  height: 10px;
-  fill: currentColor;
 }
 
 .mission-minimap__map {
@@ -172,7 +151,7 @@
 .mission-minimap__progress-label {
   font-size: 0.75rem;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #ffc93c;
 }
@@ -184,8 +163,9 @@
   white-space: nowrap;
 }
 
+/* Same track as the ResourceBar rows. */
 .mission-minimap__progress-track {
-  height: 8px;
+  height: 10px;
   background: rgba(30, 41, 59, 0.9);
   border: 1px solid #475569;
   border-radius: 999px;
@@ -199,21 +179,10 @@
   transition: width 180ms ease-out;
 }
 
-/* Below 900px the hazard banner moves to the bottom; the map shares the top row with the ResourceBar. */
-@media (max-width: 900px) {
-  .mission-minimap {
-    /*
-     * Shares the top row with the ResourceBar. 268px = 16px gutter + 220px panel
-     * + 16px gap + 16px right gutter; capped at 240px so 900px → 901px is seamless.
-     */
-    --minimap-width: clamp(120px, calc(100vw - 268px), 240px);
-  }
-}
-
 /* Compact chrome so the map itself keeps most of the space on phones. */
 @media (max-width: 480px) {
   .mission-minimap {
-    padding: 8px 8px 9px;
+    padding: 8px;
     border-radius: 12px;
   }
 
@@ -224,11 +193,6 @@
   .mission-minimap__title {
     font-size: 0.68rem;
     letter-spacing: 0.04em;
-  }
-
-  .mission-minimap__north {
-    padding: 0 5px;
-    font-size: 0.65rem;
   }
 
   .mission-minimap__footer {

@@ -105,10 +105,10 @@ export class PlayerSandbox {
       )
     }
 
-    // Player (spawns at slot 0: cell (29, 24) -> (0, -1) relative to stash (29, 25), facing north)
+    // Player (spawns at slot 0: cell (29, 24) -> (0, -1) relative to stash (29, 25)). It keeps
+    // the Player default facing ('down', toward the camera) and then turns to each move direction.
     this.player = new Player({ bounds: MAP_BOUNDS })
     this.player.position.set(0, CORRIDOR_DECK_HEIGHT, -1)
-    this.player.setFacing('up')
     this.scene.add(this.player.object)
     this.publishPlayer()
 
