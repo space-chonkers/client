@@ -29,8 +29,8 @@ export interface MarsMapLayerOptions {
 const DEFAULT_FALLBACK_SEED = 42
 const DEFAULT_CELL_SIZE = 1
 const DEFAULT_SKIRT_DEPTH = 1.7
-/** Extra non-playable terrain border around the 50x50 grid so map edges stay out of view. */
-const TERRAIN_BORDER_CELLS = 10
+/** Total procedural terrain size (75x75) around the playable 50x50 grid so edges stay out of view. */
+const PROCEDURAL_TERRAIN_SIZE = 75
 const GROUND_CLEARANCE = 0.02
 
 /**
@@ -92,10 +92,9 @@ export class MarsMapLayer {
     const origin = options.originCell ?? { cellX: MAP_SIZE / 2, cellY: MAP_SIZE / 2 }
 
     // Temporary procedural fallback until `jam-server` sends `MarsTerrainDataV1` or `seed`.
-    const proceduralSize = MAP_SIZE + TERRAIN_BORDER_CELLS * 2
     const rawMap = options.terrainData
       ? createReliefMapFromMarsTerrain(options.terrainData, { classification: 'procedural' })
-      : generateReliefMap(options.seed ?? DEFAULT_FALLBACK_SEED, proceduralSize, proceduralSize)
+      : generateReliefMap(options.seed ?? DEFAULT_FALLBACK_SEED, PROCEDURAL_TERRAIN_SIZE, PROCEDURAL_TERRAIN_SIZE)
 
     const marginX = Math.floor((rawMap.cols - MAP_SIZE) / 2)
     const marginZ = Math.floor((rawMap.rows - MAP_SIZE) / 2)

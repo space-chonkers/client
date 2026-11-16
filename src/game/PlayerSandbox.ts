@@ -12,6 +12,7 @@ import {
   type MissionMapConstruction,
   type MissionMapPlayer,
 } from './minimap/missionMap'
+import { InvestigationSites } from './map/InvestigationSites'
 import { MarsMapLayer } from './map/MarsMapLayer'
 import { FACING_VECTORS } from './player/Facing'
 import { Player } from './player/Player'
@@ -54,6 +55,7 @@ export class PlayerSandbox {
   readonly player: Player
   readonly corridors = new CorridorGrid()
   readonly mapLayer: MarsMapLayer
+  readonly investigationSites: InvestigationSites
 
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
@@ -84,6 +86,14 @@ export class PlayerSandbox {
     container.appendChild(this.renderer.domElement)
 
     this.scene.background = new THREE.Color('#1a1d26')
+
+    // 3D golden investigation site beacons synced with base constructions
+    this.investigationSites = new InvestigationSites(
+      INITIAL_SERVER_PAYLOAD.investigation,
+      INITIAL_SERVER_PAYLOAD.grid,
+      INITIAL_BASE_ORIGIN,
+    )
+    this.scene.add(this.investigationSites.object)
 
     // Layer 0: Temporary corridor grid loaded from server 3x3 initial base payload.
     // Subscribed first so the initial load is published like any later change.
@@ -142,6 +152,7 @@ export class PlayerSandbox {
     this.resizeObserver.disconnect()
     this.input.dispose()
     this.corridors.dispose()
+    this.investigationSites.dispose()
     this.mapLayer.dispose()
     this.player.dispose()
     this.renderer.dispose()
@@ -178,6 +189,7 @@ export class PlayerSandbox {
     this.prevPlayerPosition.copy(this.player.position)
     this.player.update(delta, this.elapsed, this.input.getMoveDirection())
     this.corridors.constrainMovement(this.prevPlayerPosition, this.player.position, delta)
+    this.investigationSites.update(delta, this.elapsed)
     this.publishPlayerThrottled(delta)
 
     this.updateCamera(1 - Math.exp(-CAMERA_FOLLOW_SPEED * delta))
@@ -188,10 +200,12 @@ export class PlayerSandbox {
   }
 
   private readonly publishConstructions = () => {
-    if (!this.listeners.onConstructionsChange) return
-    this.listeners.onConstructionsChange(
-      occupiedTilesToConstructions(this.corridors.getOccupiedTiles(), INITIAL_BASE_ORIGIN),
+    const constructions = occupiedTilesToConstructions(
+      this.corridors.getOccupiedTiles(),
+      INITIAL_BASE_ORIGIN,
     )
+    this.investigationSites.syncConstructions(constructions)
+    this.listeners.onConstructionsChange?.(constructions)
   }
 
   private publishPlayerThrottled(delta: number): void {
