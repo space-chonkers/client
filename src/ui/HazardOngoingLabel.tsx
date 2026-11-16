@@ -3,7 +3,8 @@ import type { HazardDefinition } from '../game/hazards/hazardEvents'
 import { GameIcon, ICON_COLORS } from './icons/GameIcons'
 import './hazardOngoingLabel.css'
 
-const LABEL_ICON_SIZE = 18
+/** Matches the default icon size of the ResourceBar HUD panel. */
+const LABEL_ICON_SIZE = 28
 
 export interface HazardOngoingLabelProps {
   hazard: HazardDefinition

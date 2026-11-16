@@ -46,8 +46,8 @@ src/
 |---|---|
 | `getHazardByCode(code)` | Returns the `HazardDefinition` for codes 1–4, `null` for 0 or unknown codes. |
 | `useHazardAlert()` | Returns `{ warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }`. Both hazards are a `HazardDefinition` or `null`. |
-| `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon badge, title, description and X button. |
-| `HazardOngoingLabel` | Prop `hazard`. Top-right pill: icon + "<Hazard> in progress". |
+| `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon, title, description and X button. |
+| `HazardOngoingLabel` | Prop `hazard`. Top-right panel: icon + "<Hazard> in progress". |
 | `AlarmSound` | `play()` (siren: 6 low-passed square beeps alternating 880 / 660 Hz, ~1.5 s), `stop()`. |
 | `useSimulatedHazardTicks(enabled, onHazardCode)` | Temporary. While `enabled`, calls `onHazardCode` every 5 s with `0` (70%) or a random hazard code 1–4 (30%). Clears its interval when disabled or unmounted. |
 
@@ -60,18 +60,19 @@ src/
 5. A new hazard is accepted only once the current one is resolved (`resolveOngoingHazard()`) or cleared (`dismiss()`).
 6. The banner has no timer: it stays until **X** is clicked. `closeWarning()` stops the alarm, hides the banner and makes that hazard the `ongoingHazard`, shown by `HazardOngoingLabel`.
 7. `resolveOngoingHazard()` removes the label. Nothing calls it yet: it is the hook for the future resolution logic.
-8. `dismiss()` (used by "Back to home") clears the banner and the ongoing hazard and stops the alarm.
+8. `dismiss()` (called by `App`'s `goHome`, currently only reachable from the co-op lobby's leave action) clears the banner and the ongoing hazard and stops the alarm.
 
 ### UI rules
 
-- The banner keeps the cream panel. The top strip and the icon rings use the hazard's icon color (`ICON_COLORS[hazard.icon]`, passed as `--hazard-accent`). Text stays ink so it is readable with every color.
+- The banner shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with the other HUD panels. A thin 4 px top strip and the uppercase title use the hazard's icon color (`ICON_COLORS[hazard.icon]`, passed as `--hazard-accent`); the description stays light text. The 40 px icon wobbles, and the X is a flat button with a light hover highlight (no `.chunky-button`).
+- The "in progress" label shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with `ResourceBar` and `ActionButtons`: translucent dark panel with blur, slate border, soft shadow, 28 px icon. The hazard's title is shown in its icon color (`--hazard-accent`).
 - Screen readers: the banner's title and description are in a `role="alert"` region; the X button is labelled "Close <Hazard> warning"; the "in progress" label is a `role="status"`.
-- Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the back button.
+- Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the "in progress" label.
 - `prefers-reduced-motion` disables the animations.
 
 ## 5. Testing
 
-Click **Solo** on the homepage: `App` enables `useSimulatedHazardTicks`, which feeds `receiveHazardCode` a code every 5 s as if it came from the server (mostly `0`, sometimes a hazard). Close the banner with **X** to see the "in progress" label. Later ticks are ignored while that hazard is active; since nothing resolves it yet, only one hazard appears per mission. "Back to home" stops the ticks and clears the hazard.
+Click **Solo** on the homepage: `App` enables `useSimulatedHazardTicks`, which feeds `receiveHazardCode` a code every 5 s as if it came from the server (mostly `0`, sometimes a hazard). Close the banner with **X** to see the "in progress" label. Later ticks are ignored while that hazard is active; since nothing resolves it yet, only one hazard appears per mission. The mission screen has no "Back to home" button; reload the page to start over.
 
 Tune `SIMULATED_TICK_INTERVAL_MS` and `SIMULATED_HAZARD_CHANCE` in `useSimulatedHazardTicks.ts` to test faster or slower.
 
@@ -89,7 +90,7 @@ bun run build   # TypeScript check + production build
 ## 6. Known Limitations
 
 - Not yet connected to the server tick stream; only the simulated Solo ticks feed codes.
-- No resolution logic yet, so the "in progress" label only goes away with "Back to home".
+- No resolution logic yet, so the "in progress" label stays for the rest of the mission.
 - The alarm volume is fixed and is not affected by the music volume control or mute.
 - Only one hazard at a time; codes received while one is active are dropped, not queued.
 
