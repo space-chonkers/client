@@ -20,30 +20,28 @@ const HAZARDS_BY_CODE: Readonly<Record<number, HazardDefinition>> = {
   1: {
     type: 'solarStorm',
     title: 'Solar Storm',
-    description: 'Radiation is on its way. Get ready!',
+    description: 'Solar activity is lowering navigation. Fix it at the stash.',
     icon: 'radiation',
   },
   2: {
     type: 'waterLeak',
     title: 'Water Leak',
-    description: 'A water tank is about to crack. Get ready!',
+    description: 'A water leak is draining the pool faster. Fix it at the stash.',
     icon: 'water',
   },
   3: {
     type: 'oxygenLoss',
     title: 'Oxygen Loss',
-    description: 'The oxygen supply is about to drop. Get ready!',
+    description: 'Oxygen loss is draining the pool faster. Fix it at the stash.',
     icon: 'oxygen',
   },
   4: {
     type: 'rottenFood',
     title: 'Rotten Food',
-    description: 'Some food supplies are about to spoil. Get ready!',
+    description: 'Some food supplies spoiled. Check the shared pool.',
     icon: 'food',
   },
 }
-
-export const HAZARD_CODES: readonly number[] = Object.keys(HAZARDS_BY_CODE).map(Number)
 
 /** Returns the hazard for a server code, or `null` for 0 and unknown codes. */
 export function getHazardByCode(code: number): HazardDefinition | null {

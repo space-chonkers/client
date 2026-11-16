@@ -37,6 +37,8 @@ const RESOURCE_ORDER: readonly PoolResourceIconType[] = [
 export interface ResourceBarProps {
   /** Optional partial resource values; missing entries fall back to simulated defaults. */
   values?: Partial<ResourceBarValues>
+  /** Optional per-resource max capacity (defaults to MAX_RESOURCE_CAPACITY). */
+  maxValues?: Partial<ResourceBarValues>
   /** Icon size in pixels. */
   iconSize?: number
   className?: string
@@ -49,6 +51,7 @@ export interface ResourceBarProps {
  */
 export const ResourceBar: React.FC<ResourceBarProps> = ({
   values,
+  maxValues,
   iconSize = 28,
   className,
 }) => {
@@ -70,16 +73,17 @@ export const ResourceBar: React.FC<ResourceBarProps> = ({
       >
         {RESOURCE_ORDER.map((type) => {
           const value = mergedValues[type]
+          const max = maxValues?.[type] ?? MAX_RESOURCE_CAPACITY
           const percentage = Math.min(
             100,
-            Math.max(0, (value / MAX_RESOURCE_CAPACITY) * 100),
+            Math.max(0, max > 0 ? (value / max) * 100 : 0),
           )
 
           return (
             <div
               key={type}
               className="resource-bar__row"
-              title={`${type}: ${value} / ${MAX_RESOURCE_CAPACITY}`}
+              title={`${type}: ${value} / ${max}`}
             >
               <GameIcon type={type} size={iconSize} />
               <div
@@ -88,7 +92,7 @@ export const ResourceBar: React.FC<ResourceBarProps> = ({
                 aria-label={type}
                 aria-valuenow={value}
                 aria-valuemin={0}
-                aria-valuemax={MAX_RESOURCE_CAPACITY}
+                aria-valuemax={max}
               >
                 <div
                   className="resource-bar__fill"

@@ -248,11 +248,49 @@
 /* Actions */
 .lobby-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.lobby-code-input {
+  width: 6.5ch;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.lobby-code-badge {
+  padding: 8px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.lobby-error {
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--coral);
+  color: var(--cream);
+  font-weight: 800;
+  text-align: center;
 }
 
 .lobby-button {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
 }
 
 @media (max-width: 640px) {

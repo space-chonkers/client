@@ -9,6 +9,8 @@ export interface HazardAlertControls {
   ongoingHazard: HazardDefinition | null
   /** Feed the hazard code received on each server tick. */
   receiveHazardCode: (code: number) => void
+  /** Feed an instantaneous server hazard that should not become ongoing. */
+  receiveInstantHazardCode: (code: number) => void
   /** Closes the warning banner (X button); its hazard becomes the ongoing one. */
   closeWarning: () => void
   /** Marks the ongoing hazard as solved. To be called by the (not yet built) resolution logic. */
@@ -28,11 +30,12 @@ export function useHazardAlert(): HazardAlertControls {
   const [alarm] = useState(() => new AlarmSound())
   const [warningHazard, setWarningHazard] = useState<HazardDefinition | null>(null)
   const [ongoingHazard, setOngoingHazard] = useState<HazardDefinition | null>(null)
+  const [instantWarning, setInstantWarning] = useState(false)
 
   useEffect(() => () => alarm.stop(), [alarm])
 
-  const receiveHazardCode = useCallback(
-    (code: number) => {
+  const showHazard = useCallback(
+    (code: number, instant: boolean) => {
       if (code === NO_HAZARD_CODE) return
 
       const hazard = getHazardByCode(code)
@@ -46,27 +49,47 @@ export function useHazardAlert(): HazardAlertControls {
       if (warningHazard || ongoingHazard) return
 
       setWarningHazard(hazard)
+      setInstantWarning(instant)
       alarm.play()
     },
     [alarm, warningHazard, ongoingHazard],
   )
 
+  const receiveHazardCode = useCallback((code: number) => showHazard(code, false), [showHazard])
+  const receiveInstantHazardCode = useCallback((code: number) => showHazard(code, true), [showHazard])
+
   const closeWarning = useCallback(() => {
     if (!warningHazard) return
-    setOngoingHazard(warningHazard)
     setWarningHazard(null)
+    if (instantWarning) {
+      setInstantWarning(false)
+    } else {
+      setOngoingHazard(warningHazard)
+    }
     alarm.stop()
-  }, [alarm, warningHazard])
+  }, [alarm, instantWarning, warningHazard])
 
   const resolveOngoingHazard = useCallback(() => {
+    setWarningHazard(null)
     setOngoingHazard(null)
-  }, [])
+    setInstantWarning(false)
+    alarm.stop()
+  }, [alarm])
 
   const dismiss = useCallback(() => {
     setWarningHazard(null)
     setOngoingHazard(null)
+    setInstantWarning(false)
     alarm.stop()
   }, [alarm])
 
-  return { warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }
+  return {
+    warningHazard,
+    ongoingHazard,
+    receiveHazardCode,
+    receiveInstantHazardCode,
+    closeWarning,
+    resolveOngoingHazard,
+    dismiss,
+  }
 }

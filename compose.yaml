@@ -1,6 +1,9 @@
 services:
   client:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8081/ws}
     ports:
-      - "8080:80"
+      - "5173:80"
     restart: unless-stopped
