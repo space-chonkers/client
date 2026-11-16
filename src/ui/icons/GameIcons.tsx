@@ -5,11 +5,12 @@ export type PoolResourceIconType =
   | 'water'
   | 'energy'
   | 'food'
-  | 'radiation'
+
+export type HazardIconType = 'radiation' | 'oxygen' | 'water' | 'food'
 
 export type ConstructionEventIconType = 'build' | 'expand' | 'collect'
 
-export type GameIconType = PoolResourceIconType | ConstructionEventIconType
+export type GameIconType = PoolResourceIconType | HazardIconType | ConstructionEventIconType
 
 /**
  * Transparent PNG asset URLs for UI rendering or Three.js texture loading.

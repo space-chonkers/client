@@ -94,7 +94,9 @@
 .action-buttons__keys {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  color: #cbd5e1;
+  font-size: 0.75rem;
 }
 
 .action-buttons__key {

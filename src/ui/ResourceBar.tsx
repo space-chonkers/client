@@ -11,7 +11,6 @@ export interface ResourceBarValues {
   water: number
   energy: number
   food: number
-  radiation: number
 }
 
 /** Maximum shared pool capacity per resource defined in the game specification. */
@@ -23,7 +22,6 @@ export const DEFAULT_SIMULATED_RESOURCES: Readonly<ResourceBarValues> = {
   water: 70,
   energy: 90,
   food: 60,
-  radiation: 12,
 }
 
 const RESOURCE_ORDER: readonly PoolResourceIconType[] = [
@@ -31,24 +29,26 @@ const RESOURCE_ORDER: readonly PoolResourceIconType[] = [
   'water',
   'energy',
   'food',
-  'radiation',
 ]
 
 export interface ResourceBarProps {
   /** Optional partial resource values; missing entries fall back to simulated defaults. */
   values?: Partial<ResourceBarValues>
+  /** Optional per-resource max capacity (defaults to MAX_RESOURCE_CAPACITY). */
+  maxValues?: Partial<ResourceBarValues>
   /** Icon size in pixels. */
   iconSize?: number
   className?: string
 }
 
 /**
- * Top-left HUD resource panel displaying the 5 shared pool/status indicators
- * (oxygen, water, energy, food, and radiation). Each row renders the resource
+ * Top-left HUD resource panel displaying the four shared resource pools
+ * (oxygen, water, energy, and food). Each row renders the resource
  * icon, a color-coded percentage progress bar, and the numeric value.
  */
 export const ResourceBar: React.FC<ResourceBarProps> = ({
   values,
+  maxValues,
   iconSize = 28,
   className,
 }) => {
@@ -70,16 +70,17 @@ export const ResourceBar: React.FC<ResourceBarProps> = ({
       >
         {RESOURCE_ORDER.map((type) => {
           const value = mergedValues[type]
+          const max = maxValues?.[type] ?? MAX_RESOURCE_CAPACITY
           const percentage = Math.min(
             100,
-            Math.max(0, (value / MAX_RESOURCE_CAPACITY) * 100),
+            Math.max(0, max > 0 ? (value / max) * 100 : 0),
           )
 
           return (
             <div
               key={type}
               className="resource-bar__row"
-              title={`${type}: ${value} / ${MAX_RESOURCE_CAPACITY}`}
+              title={`${type}: ${value} / ${max}`}
             >
               <GameIcon type={type} size={iconSize} />
               <div
@@ -88,7 +89,7 @@ export const ResourceBar: React.FC<ResourceBarProps> = ({
                 aria-label={type}
                 aria-valuenow={value}
                 aria-valuemin={0}
-                aria-valuemax={MAX_RESOURCE_CAPACITY}
+                aria-valuemax={max}
               >
                 <div
                   className="resource-bar__fill"

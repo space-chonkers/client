@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { BackgroundMusicControls } from '../audio/useBackgroundMusic'
 import MarsHomeScene from '../home/MarsHomeScene'
 import MusicVolumeControl from '../home/MusicVolumeControl'
@@ -61,13 +62,51 @@ interface CoopLobbyScreenProps {
   localPlayerId: string
   maxPlayers: number
   onLeave: () => void
+  matchId?: string | null
+  isHost?: boolean
+  phase?: string
+  error?: string | null
+  connected?: boolean
+  onCreate?: () => Promise<void> | void
+  onQuickJoin?: () => Promise<void> | void
+  onJoinByCode?: (code: string) => Promise<void> | void
+  onStart?: () => Promise<void> | void
 }
 
 /** Co-op waiting room: shows the crew slots filling up while players join. */
-export default function CoopLobbyScreen({ music, players, localPlayerId, maxPlayers, onLeave }: CoopLobbyScreenProps) {
+export default function CoopLobbyScreen({
+  music,
+  players,
+  localPlayerId,
+  maxPlayers,
+  onLeave,
+  matchId,
+  isHost,
+  phase,
+  error,
+  connected,
+  onCreate,
+  onQuickJoin,
+  onJoinByCode,
+  onStart,
+}: CoopLobbyScreenProps) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
   const slots = Array.from({ length: maxPlayers }, (_, slotIndex) =>
     players.find((player) => player.slot === slotIndex),
   )
+
+  const run = async (fn?: (() => Promise<void> | void) | ((code: string) => Promise<void> | void), arg?: string) => {
+    if (!fn) return
+    setBusy(true)
+    try {
+      await (fn as (c?: string) => Promise<void> | void)(arg)
+    } catch {
+      // Error is shown through the `error` prop by the session.
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="lobby-screen">
@@ -101,6 +140,46 @@ export default function CoopLobbyScreen({ music, players, localPlayerId, maxPlay
           </ul>
 
           <div className="lobby-actions">
+            {!matchId && (
+              <>
+                <button type="button" className="chunky-button lobby-button" disabled={busy} onClick={() => run(onCreate)}>
+                  Create lobby
+                </button>
+                <button type="button" className="chunky-button lobby-button" disabled={busy} onClick={() => run(onQuickJoin)}>
+                  Quick match
+                </button>
+                <input
+                  className="lobby-code-input"
+                  aria-label="Match code"
+                  placeholder="ABCD"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  maxLength={4}
+                />
+                <button
+                  type="button"
+                  className="chunky-button lobby-button"
+                  disabled={busy || code.length !== 4}
+                  onClick={() => run(onJoinByCode, code)}
+                >
+                  Join code
+                </button>
+              </>
+            )}
+            {matchId && (
+              <>
+                <span className="lobby-code-badge" aria-live="polite">
+                  Code: <strong>{matchId}</strong>
+                </span>
+                {isHost && phase === 'lobby' && (
+                  <button type="button" className="chunky-button lobby-button" disabled={busy} onClick={() => run(onStart)}>
+                    Start mission
+                  </button>
+                )}
+              </>
+            )}
+            {connected === false && <p className="lobby-error" role="status">Connecting to server…</p>}
+            {error && <p className="lobby-error" role="alert">{error}</p>}
             <button type="button" className="chunky-button lobby-button" onClick={onLeave}>
               Leave
             </button>

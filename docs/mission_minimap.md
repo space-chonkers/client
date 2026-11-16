@@ -47,8 +47,8 @@ src/
 | Module | Responsibility |
 |---|---|
 | `CorridorGrid` | Owns occupancy. Exposes `getOccupiedTiles()` (copied snapshot, local coordinates) and `onOccupancyChange(listener)` (fires only when tiles are actually added or removed). |
-| `PlayerSandbox` | Accepts optional `PlayerSandboxListeners`. Converts occupancy (`occupiedTilesToConstructions`) and player position (`sandboxToWorldCell`) to world cells and calls `onConstructionsChange` / `onPlayerChange`. |
-| `PlayerSandboxView` | Holds `constructions` in React state (`setConstructions` is the callback) and owns a `PlayerSnapshotStore` (`playerStore.set` is the player callback). Passes both, with the payload's grid and investigation sites, to `MissionMinimap`, and disposes the sandbox on unmount. Also renders the top-right HUD column, where an optional `topRightStatus` (the hazard "in progress" label) sits under the minimap. |
+| `PlayerSandbox` | Applies authoritative constructions and player positions to the scene. Publishes the local player marker through `PlayerSandboxListeners`; mock occupancy is only used as a fallback before match state arrives. |
+| `PlayerSandboxView` | Uses fallback constructions only before server state arrives and owns a `PlayerSnapshotStore` (`playerStore.set` is the player callback). Passes the server grid, constructions, and investigation sites to `MissionMinimap` and disposes the sandbox on unmount. Also renders the top-right HUD column, where an optional `topRightStatus` sits under the minimap. |
 | `MissionMinimap` | Pure presentation: renders the props as SVG. |
 | `missionMap.ts` | Shared types and pure helpers, unit tested. |
 | `PlayerSnapshotStore` | Keeps the latest player snapshot outside React state. Exposes `getSnapshot` / `subscribe` (`MissionMapPlayerSource`) for `useSyncExternalStore` and `set` for the sandbox; skips notifying when the same snapshot is set again. |
@@ -59,11 +59,11 @@ No global store, event bus or second Three.js scene is involved.
 
 Server/world cells: `cellX` grows west → east, `cellY` grows north → south, `(0, 0)` is the north-west cell, `(49, 49)` the south-east cell.
 
-The sandbox scene is relative to `INITIAL_BASE_ORIGIN = { cellX: 29, cellY: 25 }` (the Stash), with tile centres on integer `(x, z)` and `-Z` = north:
+The scene is relative to the authoritative stash cell (initially the mock `INITIAL_BASE_ORIGIN = { cellX: 29, cellY: 25 }`), with tile centres on integer `(x, z)` and `-Z` = north:
 
 ```ts
-sandboxToWorldCell(localX, localZ, INITIAL_BASE_ORIGIN)
-// → { cellX: localX + 29, cellY: localZ + 25 }
+sandboxToWorldCell(localX, localZ, stashOrigin)
+// → { cellX: localX + stashOrigin.cellX, cellY: localZ + stashOrigin.cellY }
 ```
 
 The result keeps the scene convention (integer = tile centre) and stays continuous for the player, so the marker moves smoothly instead of jumping between cells.
@@ -82,17 +82,17 @@ This matches the server spawn format (slot 0 is `{ x: 29.5, y: 24.5 }`). Base ce
 
 | Data | Source | When it updates |
 |---|---|---|
-| Grid size | `INITIAL_SERVER_PAYLOAD.grid` | Static |
-| Investigation sites | `INITIAL_SERVER_PAYLOAD.investigation` | Static |
-| Constructions | `CorridorGrid` occupancy → `onConstructionsChange` | On start (initial 3×3 load) and after every successful `placeTile` / `removeTile` |
-| Player | `Player.position` + `Player.facing` → `onPlayerChange` → `PlayerSnapshotStore` | On start, then every 0.1 s on average (~10 Hz; the timer carries its overshoot) when the position moved ≥ 0.01 cells or the facing changed |
+| Grid size | `match.state.grid` (mock payload before state arrives) | Match state |
+| Investigation sites | `match.state.investigation` (mock payload before state arrives) | Match state; 3D sites are replaced when the server site list or stash origin changes |
+| Constructions | `match.state.constructions` | Match state/frames; server-authoritative |
+| Player | Authoritative player position applied by `PlayerSandbox`, then `onPlayerChange` → `PlayerSnapshotStore` | Initial server position, then sampled about every 0.1 s while position or facing changes |
 
-Construction state is never derived from meshes or button clicks: a rejected or duplicate `E`/`Space` placement does not reach `onOccupancyChange`, so the minimap does not change.
+Construction state is never derived from meshes or button clicks. The live minimap uses the server snapshot, so rejected build requests do not change it.
 
 ### Rendering cost
 - When the player stands still, the sandbox sends nothing and React does not re-render.
 - Player updates go into `PlayerSnapshotStore`, not React state. Only `MinimapPlayer` subscribes (`useSyncExternalStore`), so ~10 Hz updates re-render just the marker; `PlayerSandboxView`, `ResourceBar`, `ActionButtons` and the rest of `MissionMinimap` stay untouched (verified in the browser by counting renders while walking).
-- Terrain, base and sites are `memo` sub-components, so they only re-render when constructions change. Grid lines are two `<path>` elements.
+- Terrain, base and sites are `memo` sub-components, so they only re-render when their snapshot data changes. Grid lines are two `<path>` elements.
 - The marker eases between updates with a 120 ms CSS `transform` transition (disabled with `prefers-reduced-motion`). Rotation snaps to the new facing to avoid spinning the long way round.
 
 ## 5. Objective Completion
@@ -112,13 +112,13 @@ Any construction kind counts (`base_tile` or `stash`). Sites outside the grid ar
 - The column owns the width (`--top-right-hud-width` in `player.css`) and stretches both children to it, so **the minimap is always exactly as wide as the hazard "in progress" label**.
 - Above 900 px the width is a fixed 272 px: the longest label ("SOLAR STORM in progress") measured with the Nunito 800/900 metrics, so every label fits on one line. The top-centre hazard banner narrows instead (`min(560px, 100% − 2 × 304px)`), so it always fits between the ResourceBar and the minimap.
 - At 900 px and below (the banner moves to the bottom), `clamp(120px, 100vw − 268px, 272px)` keeps it beside the 220 px `ResourceBar`; the width is continuous across 900/901 px. On narrow widths the label text wraps.
-- Below 388 px there is no room beside the ResourceBar, so the column moves under it (`top: 226px`, assuming the 198 px-tall five-row ResourceBar) and the map keeps its 120 px minimum. Below 480 px the frame chrome gets more compact.
-- The layout was verified without overlaps at 320×568, 320×640, 360, 390, 900, 901, 1000 and 1280 px wide with the previous 240 px width. The 272 px width has not been checked in a browser yet.
+- Below 388 px there is no room beside the ResourceBar, so the column moves under it (`top: 190px`, for the four-row ResourceBar) and the map keeps its 120 px minimum. Below 480 px the frame chrome gets more compact.
+- The layout was previously verified at 320×568, 320×640, 360, 390, 900, 901, 1000 and 1280 px wide; verify again after any HUD sizing changes.
 - `pointer-events: none`: the map never blocks the scene or input.
 
 ## 7. API, Configuration and Security
 
-No network APIs, environment variables or credentials are used. All data comes from the in-memory sandbox and the mock payload.
+`PlayerSandboxView` consumes the server's match state and frame snapshots; the mock payload is only a fallback before state is available. The minimap performs no network requests itself.
 
 ## 8. Edge Cases
 
@@ -150,14 +150,13 @@ bun run build
 
 ## 10. Known Limitations
 
-- The sandbox only lets the player build inside a 19×19 local area (world cells 20–38 × 16–34). All mock investigation sites are outside it, so sites cannot be completed by playing yet; the completed state is covered by tests.
-- Only the local player is shown. Investigation sites and grid size come from the mock payload.
+- Only the local player is shown on the minimap; investigation sites, constructions, and grid size come from authoritative match state when available.
 - The background is decorative and does not represent real terrain.
-- On narrow phones the stacked layout assumes the five-row ResourceBar (198 px tall) and a viewport at least ~568 px tall; on shorter screens the minimap can touch the action buttons.
+- On narrow phones the stacked layout assumes the four-row ResourceBar and a viewport at least ~568 px tall; on shorter screens the minimap can touch the action buttons.
 
-## 11. Future Integration with Match State
+## 11. Live Match Integration
 
-The props already use server-shaped data (`ServerGridDimensions`, `ServerInvestigationCell`, and constructions as `{ kind, cellX, cellY }`). To use authoritative match snapshots, `PlayerSandboxView` (or its replacement) can pass `match.grid`, `match.investigation` and `match.constructions` directly to `MissionMinimap`, and map server player positions to `MissionMapPlayer` (server spawn coordinates such as `29.5` are cell centres, i.e. `cellX = x − 0.5`). `MissionMinimap` needs no changes.
+`PlayerSandboxView` passes `match.grid`, `match.investigation`, and `match.constructions` to `MissionMinimap`. `PlayerSandbox` applies authoritative player coordinates and publishes the local marker through `PlayerSnapshotStore`; protocol coordinates such as `29.5` convert to the map's tile-center convention by subtracting `0.5`. `MissionMinimap` remains presentational.
 
 ## 12. Change History
 

@@ -7,12 +7,12 @@
 ### Objectives
 - Provide a low-poly golden 3D asset matching the golden diamonds on `MissionMinimap`.
 - Share geometries and materials across all investigation sites on the map.
-- Sync completion state with `CorridorGrid` constructions via `resolveInvestigationProgress`.
+- Sync completion state with authoritative match constructions via `resolveInvestigationProgress`.
 - Animate idle bobbing/rotation for pending sites and a `0.4s` collection animation when covered.
 
 ### Scope
 - **Included:** `src/assets/InvestigationSite.tsx`, `src/game/map/InvestigationSites.ts`, and `PlayerSandbox.ts` integration.
-- **Excluded:** WebSocket transport (`base.build` / `match.build`), win-screen modal (`match.ended`), and `MissionMinimap.tsx` internals.
+- **Excluded:** WebSocket transport and `MissionMinimap.tsx` rendering internals.
 
 ## 2. Architecture
 
@@ -33,7 +33,7 @@ src/
 ### Architectural Responsibilities
 - `InvestigationSite.tsx` builds shared Three.js geometries and materials (`pad`, `ring`, `crystal`, `halo`) in `INVESTIGATION_SITE_PALETTE` (`#facc15` gold, `#d97706` amber, `#fff6ef` cream, `#1e293b` pad) and exposes `createInstance()` and `dispose()`.
 - `InvestigationSites.ts` places one instance per `investigation` cell, calls `resolveInvestigationProgress` in `syncConstructions()`, and drives idle and collection animations in `update(delta, elapsed)`.
-- `PlayerSandbox.ts` mounts `InvestigationSites`, triggers `syncConstructions` from `publishConstructions`, steps `update(delta, elapsed)` in `tick()`, and disposes resources in `dispose()`.
+- `PlayerSandbox.ts` mounts `InvestigationSites`, updates its sites from match state and its completion from authoritative constructions, steps animations in `tick()`, and disposes resources in `dispose()`.
 
 ## 3. Implementation Details
 
@@ -52,12 +52,12 @@ src/
 
 ## 5. Data Management
 
-- Reads `INITIAL_SERVER_PAYLOAD.investigation`, `INITIAL_SERVER_PAYLOAD.grid`, and `INITIAL_BASE_ORIGIN` in `PlayerSandbox.ts`.
+- Starts from the mock payload, then replaces cells, grid size, and stash origin with authoritative match state when it arrives.
 - Uses `resolveInvestigationProgress` from `src/game/minimap/missionMap.ts` as the single source of truth for completion.
 
 ## 6. API and Integrations
 
-No network calls yet. Ready for `match.state` / `match.build` updates once connected to `jam-server`.
+No network calls are made by the scene manager. `PlayerSandboxView` passes `match.state`/frame snapshots to `PlayerSandbox`, which syncs the 3D sites.
 
 ## 7. Configuration and Environment Variables
 
@@ -92,7 +92,7 @@ bun run build
 
 ## 13. Known Limitations
 
-- Uses `INITIAL_SERVER_PAYLOAD.investigation` until live `match.state` / `match.build` WebSocket events are wired.
+- Before authoritative match state arrives, the scene displays the mock payload's investigation sites.
 
 ## 14. Future Improvements
 

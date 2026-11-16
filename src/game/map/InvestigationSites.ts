@@ -39,21 +39,44 @@ export class InvestigationSites {
 
   private readonly resources: InvestigationSiteResources
   private readonly tracked: TrackedSite[] = []
+  private cells: ReadonlyArray<ServerInvestigationCell> = []
+  private grid: ServerGridDimensions = { width: 0, height: 0 }
+  private originCell = { cellX: 0, cellY: 0 }
+  private lastSitesKey = ''
 
   constructor(
-    private readonly cells: ReadonlyArray<ServerInvestigationCell>,
-    private readonly grid: ServerGridDimensions,
+    cells: ReadonlyArray<ServerInvestigationCell>,
+    grid: ServerGridDimensions,
     originCell: { readonly cellX: number; readonly cellY: number },
   ) {
     this.object.name = 'InvestigationSites'
     this.resources = createInvestigationSiteResources()
+    this.syncSites(cells, grid, originCell)
+  }
+
+  /** Replaces the map's site set when an authoritative match snapshot arrives. */
+  syncSites(
+    cells: ReadonlyArray<ServerInvestigationCell>,
+    grid: ServerGridDimensions,
+    originCell: { readonly cellX: number; readonly cellY: number },
+  ): void {
+    const key = `${grid.width}x${grid.height}:${originCell.cellX},${originCell.cellY}:` +
+      cells.map((cell) => toCellKey(cell.cellX, cell.cellY)).join(';')
+    if (key === this.lastSitesKey) return
+
+    for (const item of this.tracked) this.object.remove(item.instance.group)
+    this.tracked.length = 0
+    this.cells = cells
+    this.grid = grid
+    this.originCell = { ...originCell }
+    this.lastSitesKey = key
 
     cells.forEach((cell, index) => {
       const instance = this.resources.createInstance()
       instance.group.position.set(
-        Math.round(cell.cellX - originCell.cellX),
+        Math.round(cell.cellX - this.originCell.cellX),
         0,
-        Math.round(cell.cellY - originCell.cellY),
+        Math.round(cell.cellY - this.originCell.cellY),
       )
       this.object.add(instance.group)
       this.tracked.push({
