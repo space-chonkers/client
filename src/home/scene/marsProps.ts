@@ -10,14 +10,6 @@ import {
  */
 export const MARS_PALETTE = {
   sky: '#f3cdb8',
-  tileLight: '#f0b48e',
-  tileDark: '#e8a47e',
-  duneLow: '#dd875f',
-  duneMid: '#c9653f',
-  duneHigh: '#a94a2e',
-  rock: '#8f3b24',
-  rockLight: '#b0533a',
-  craterFloor: '#b85a3b',
   hull: '#fff3e6',
   coral: '#e5533c',
   teal: '#108a8c',
@@ -25,13 +17,14 @@ export const MARS_PALETTE = {
   tire: '#3b2a26',
 } as const
 
-const TERRAIN_GRID_SIZE = 28
+/** Radius of the circular plain the player can walk on, centered on the base. */
 const FLAT_ZONE_RADIUS = 5.5
-const TERRAIN_HEIGHT_STEP = 0.25
-const TERRAIN_MAX_HEIGHT = 1.75
-const TERRAIN_BASE_DEPTH = 1
-const ROCK_COUNT = 26
-const TERRAIN_SEED = 20261114
+/**
+ * Extra cells leveled around the plain: the terrain height is interpolated
+ * from the 2 nearest cells on each side, so without this margin the slopes
+ * outside the circle would bend the ground inside it.
+ */
+const FLAT_ZONE_LEVELING_PADDING = 2
 
 /** Radius of the circle the decorative rover drives around the base. */
 export const ROVER_PATH_RADIUS = 4.2
@@ -59,16 +52,17 @@ export function isMarsTileWalkable({ x, z }: GridPosition): boolean {
   )
 }
 
-/** Deterministic PRNG (mulberry32) so the landscape is always the same. */
-function createSeededRandom(seed: number): () => number {
-  let state = seed
-  return () => {
-    state |= 0
-    state = (state + 0x6d2b79f5) | 0
-    let t = Math.imul(state ^ (state >>> 15), 1 | state)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+/** Tiles the terrain must keep flat: the walkable plain plus the leveling padding. */
+export function getFlatZoneTiles(): GridPosition[] {
+  const radius = FLAT_ZONE_RADIUS + FLAT_ZONE_LEVELING_PADDING
+  const extent = Math.ceil(radius)
+  const tiles: GridPosition[] = []
+  for (let x = -extent; x <= extent; x++) {
+    for (let z = -extent; z <= extent; z++) {
+      if (Math.hypot(x, z) <= radius) tiles.push({ x, z })
+    }
   }
+  return tiles
 }
 
 const materialCache = new Map<string, THREE.MeshStandardMaterial>()
@@ -94,93 +88,6 @@ function mesh(geometry: THREE.BufferGeometry, color: string): THREE.Mesh {
   result.castShadow = true
   result.receiveShadow = true
   return result
-}
-
-function terrainHeightAt(distanceFromCenter: number, random: () => number): number {
-  if (distanceFromCenter <= FLAT_ZONE_RADIUS) return 0
-
-  const rawHeight = (distanceFromCenter - FLAT_ZONE_RADIUS) * 0.22 + random() * 0.9
-  const steppedHeight = Math.floor(rawHeight / TERRAIN_HEIGHT_STEP) * TERRAIN_HEIGHT_STEP
-  return Math.min(TERRAIN_MAX_HEIGHT, steppedHeight)
-}
-
-function terrainColorAt(gridX: number, gridZ: number, height: number): string {
-  if (height === 0) {
-    return (gridX + gridZ) % 2 === 0 ? MARS_PALETTE.tileLight : MARS_PALETTE.tileDark
-  }
-  if (height < 0.6) return MARS_PALETTE.duneLow
-  if (height < 1.2) return MARS_PALETTE.duneMid
-  return MARS_PALETTE.duneHigh
-}
-
-interface TerrainTile {
-  x: number
-  z: number
-  height: number
-}
-
-/** Terraced terrain (Crossy Road style) with rocks scattered outside the base. */
-export function createMarsTerrain(): THREE.Group {
-  const random = createSeededRandom(TERRAIN_SEED)
-  const terrain = new THREE.Group()
-  const tiles: TerrainTile[] = []
-  const halfGrid = TERRAIN_GRID_SIZE / 2
-
-  for (let gridX = 0; gridX < TERRAIN_GRID_SIZE; gridX++) {
-    for (let gridZ = 0; gridZ < TERRAIN_GRID_SIZE; gridZ++) {
-      // Tile centers on integer coordinates so terrain, base and character line up
-      const x = gridX - halfGrid
-      const z = gridZ - halfGrid
-      tiles.push({ x, z, height: terrainHeightAt(Math.hypot(x, z), random) })
-    }
-  }
-
-  const tileMesh = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.95 }),
-    tiles.length,
-  )
-  tileMesh.receiveShadow = true
-
-  const matrix = new THREE.Matrix4()
-  const color = new THREE.Color()
-  tiles.forEach((tile, index) => {
-    const tileDepth = tile.height + TERRAIN_BASE_DEPTH
-    matrix.makeScale(1, tileDepth, 1)
-    matrix.setPosition(tile.x, tile.height - tileDepth / 2, tile.z)
-    tileMesh.setMatrixAt(index, matrix)
-    tileMesh.setColorAt(index, color.set(terrainColorAt(Math.round(tile.x + halfGrid), Math.round(tile.z + halfGrid), tile.height)))
-  })
-  terrain.add(tileMesh)
-
-  const rockGeometry = new THREE.DodecahedronGeometry(0.3, 0)
-  const rockTiles = tiles.filter((tile) => {
-    const distance = Math.hypot(tile.x, tile.z)
-    return distance > FLAT_ZONE_RADIUS + 0.5 && distance < 12
-  })
-  for (let i = 0; i < ROCK_COUNT; i++) {
-    const tile = rockTiles[Math.floor(random() * rockTiles.length)]
-    const rock = mesh(rockGeometry, random() > 0.5 ? MARS_PALETTE.rock : MARS_PALETTE.rockLight)
-    const scale = 0.6 + random() * 0.9
-    rock.scale.set(scale, scale * 0.7, scale)
-    rock.rotation.set(random() * Math.PI, random() * Math.PI, 0)
-    rock.position.set(tile.x + (random() - 0.5) * 0.4, tile.height + 0.1 * scale, tile.z + (random() - 0.5) * 0.4)
-    terrain.add(rock)
-  }
-
-  terrain.add(createCrater(-3.2, 3.6, 0.9), createCrater(3.4, -3.3, 0.6))
-  return terrain
-}
-
-function createCrater(x: number, z: number, radius: number): THREE.Group {
-  const crater = new THREE.Group()
-  const rim = mesh(new THREE.CylinderGeometry(radius, radius * 1.15, 0.12, 7), MARS_PALETTE.duneLow)
-  const floor = mesh(new THREE.CylinderGeometry(radius * 0.7, radius * 0.7, 0.13, 7), MARS_PALETTE.craterFloor)
-  rim.position.y = 0.06
-  floor.position.y = 0.065
-  crater.add(rim, floor)
-  crater.position.set(x, 0, z)
-  return crater
 }
 
 function createDome(radius: number): THREE.Group {
