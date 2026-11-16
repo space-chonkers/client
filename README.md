@@ -4,6 +4,10 @@ A minimal Bun + TypeScript + React + Three.js client. The sample screen renders 
 spinning Three.js cube. The production container serves the built static client;
 game/backend server logic belongs in its separate repo.
 
+The procedural Layer −1 Martian terrain lives in `src/terrain-kit/`. In development,
+open `/?view=terrain-showcase` to inspect it; see
+[docs/terrain_layer_minus_1.md](docs/terrain_layer_minus_1.md).
+
 ## Local development
 
 Install [Bun](https://bun.sh), then run:

@@ -5,6 +5,8 @@ import './actionButtons.css'
 /** Matches the default icon size of the ResourceBar HUD panel. */
 const ACTION_ICON_SIZE = 28
 
+import './chunkyButton.css'
+
 export interface ActionButtonsProps {
   /** Called when the player builds (Build button, `E` or `Space`). */
   onBuild?: () => void
