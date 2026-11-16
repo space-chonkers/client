@@ -130,29 +130,31 @@ export function createCorridorSegment(
 
   const addWall = (side: CardinalSide) => {
     const isZWall = side === 'north' || side === 'south'
+    // Inset slightly from ±0.50 tile edges and pillar faces to prevent Z-fighting.
     const wallGeo = isZWall
-      ? new THREE.BoxGeometry(1.0, 0.58, 0.08)
-      : new THREE.BoxGeometry(0.08, 0.58, 1.0)
+      ? new THREE.BoxGeometry(0.98, 0.58, 0.076)
+      : new THREE.BoxGeometry(0.076, 0.58, 0.98)
     const capGeo = isZWall
-      ? new THREE.BoxGeometry(1.0, 0.04, 0.09)
-      : new THREE.BoxGeometry(0.09, 0.04, 1.0)
+      ? new THREE.BoxGeometry(0.98, 0.04, 0.086)
+      : new THREE.BoxGeometry(0.086, 0.04, 0.98)
 
     const wall = new THREE.Mesh(wallGeo, hullMat)
     const cap = new THREE.Mesh(capGeo, coralMat)
 
-    const offset = 0.46
+    const offset = 0.456
+    const capY = 0.678
     if (side === 'north') {
       wall.position.set(0, 0.37, -offset)
-      cap.position.set(0, 0.68, -offset)
+      cap.position.set(0, capY, -offset)
     } else if (side === 'south') {
       wall.position.set(0, 0.37, offset)
-      cap.position.set(0, 0.68, offset)
+      cap.position.set(0, capY, offset)
     } else if (side === 'west') {
       wall.position.set(-offset, 0.37, 0)
-      cap.position.set(-offset, 0.68, 0)
+      cap.position.set(-offset, capY, 0)
     } else {
       wall.position.set(offset, 0.37, 0)
-      cap.position.set(offset, 0.68, 0)
+      cap.position.set(offset, capY, 0)
     }
 
     segment.add(wall, cap)
