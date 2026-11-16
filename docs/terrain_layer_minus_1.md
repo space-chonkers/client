@@ -22,8 +22,9 @@ are separate systems and are not part of this feature.
 Included: cell data model, relief generation, classification, mineral distribution,
 terrain meshing, static dressing, a development-only showcase, and the client side
 of the proposed real-elevation contract (validation, adapter, coordinate conversions).
-Excluded: gameplay, Layer 0/1, networking, fetching or ingesting real elevation data,
-a Points of Interest catalog.
+Excluded: gameplay, Layer 0/1, WebSockets, ingesting or processing real elevation data
+(the backend does that), a Points of Interest catalog. Real elevation is fetched only by
+the development showcase.
 
 ## 2. Architecture
 
@@ -35,6 +36,7 @@ src/
 │   ├── mineralDistribution.ts# Where mineral families may occur (no Three.js)
 │   ├── elevation.ts          # Real elevation model and normalization (no Three.js)
 │   ├── marsTerrainContract.ts# Proposed v1 payload, validation, adapter to ReliefMap (no Three.js)
+│   ├── marsTerrainApi.ts     # Fetches and validates GET /v1/mars-terrain/{seed} (no Three.js)
 │   ├── marsCoordinates.ts    # Geographic ↔ local metres ↔ grid ↔ world (no Three.js)
 │   ├── reliefField.ts        # ReliefMap → continuous height, surface mix and shading
 │   ├── reliefTerrain.ts      # ReliefMap → chunked terrain + baked dressing
@@ -60,7 +62,7 @@ src/
 
 Dependency direction: the data modules (`reliefMap.ts`, `craters.ts`,
 `mineralDistribution.ts`, `elevation.ts`, `marsTerrainContract.ts`,
-`marsCoordinates.ts`) have no Three.js dependency. Everything that builds meshes
+`marsTerrainApi.ts`, `marsCoordinates.ts`) have no Three.js dependency. Everything that builds meshes
 depends on them, never the reverse.
 
 ### Terrain sources
@@ -80,7 +82,29 @@ the surface uses one neutral ground colour, and nothing is dressed (no formation
 minerals or scattered rocks). With `procedural`, they are game decoration, never
 observations.
 
-The showcase stage chooses the source (`VIEW_BUILDERS` in `ShowcaseStage.ts`). Today it is always procedural.
+The showcase panel has a **Procedural / Real Mars** source selector (Layer −1 view only):
+
+- **Procedural:** `ShowcaseStage.load(view, seed)` builds the map from the seed (`VIEW_BUILDERS`).
+- **Real Mars:** `TerrainShowcase` fetches `fetchMarsTerrain(seed)`, converts it with
+  `createReliefMapFromMarsTerrain(data)` (default options, so the map stays
+  unclassified and undressed) and shows it with `ShowcaseStage.loadMap(map)`. The
+  stage is cleared while the request is pending, so a previous map is never shown as
+  the new seed's terrain. Changing seed, source or view aborts a pending request.
+  The panel shows the map centre (planetocentric latitude, east longitude), the
+  elevation range and the HiRISE product ID; dataset, resolution, datum and provider
+  are under a collapsible "Source details". For unclassified maps the cell inspector
+  shows each cell's mean elevation in metres instead of the (always `unclassified`)
+  region, geology and feature, and the stats omit the mineral deposit counts, which
+  are always zero there.
+
+The stats line always shows fps. Draw calls, triangles, build time and deposits come
+from `ShowcaseStage.getStats().content`, which is `null` until the current content has
+been rendered, so figures from a previous map never show while a real map is loading,
+after a failed request or after a cancelled one.
+
+The camera keeps its viewpoint across seeds of the same source and reframes when
+switching between procedural and real terrain, whose true-scale bounds differ.
+Replaced content is always disposed (`disposeObject`) before the next map is built.
 
 ## 3. Implementation Details
 
@@ -150,7 +174,9 @@ The showcase stage chooses the source (`VIEW_BUILDERS` in `ShowcaseStage.ts`). T
 
 ## 5. Data Management
 
-Procedural maps are computed client-side from the seed. Real-elevation maps keep the
+Procedural maps are computed client-side from the seed. Real-elevation maps are fetched
+from the backend per seed, with no client cache (the same seed always returns the same
+map, and the payload is about 24 KB of JSON). They keep the
 received metres unmodified on `map.elevation`; normalized relief is derived
 deterministically (median reference, 98th-percentile scale, at least 15 m). There is no persistence and no
 shared state. The showcase keeps its UI state in React. `ShowcaseStage` owns the
@@ -158,18 +184,35 @@ Three.js objects.
 
 ## 6. API and Integrations
 
-None yet. The feature does not use the network, the WebSocket protocol, or the backend.
-The real-elevation payload it can consume is a proposal, documented in
-[mars_terrain_contract.md](mars_terrain_contract.md).
+One HTTP route, used only by the development showcase:
+
+| Call | Request | Result |
+|---|---|---|
+| `fetchMarsTerrain(seed, { signal })` | `GET /v1/mars-terrain/{seed}`, seed an integer in [0, 2³²) | `MarsTerrainDataV1`, validated with `parseMarsTerrainData` |
+
+The backend (server `internal/terrain`) picks one of four prepared HiRISE DTM regions
+and a 500 m × 500 m window from the seed. The payload contract is documented in
+[mars_terrain_contract.md](mars_terrain_contract.md). The feature does not use the
+WebSocket protocol, matchmaking or gameplay state.
+
+```ts
+const data = await fetchMarsTerrain(42, { signal })
+const map = createReliefMapFromMarsTerrain(data) // classification: 'none'
+```
 
 ## 7. Configuration and Environment Variables
 
-None. To open the development showcase:
+No environment variables. To open the development showcase:
 
 ```bash
 bun run dev
 # then open http://localhost:5173/?view=terrain-showcase
 ```
+
+For **Real Mars**, also run the Go server on `localhost:8080` (server repository:
+`docker compose up --build`). `vite.config.ts` proxies `/v1/mars-terrain` to it, so the
+request is same-origin and needs no CORS setup. The proxy is `server.proxy`, which only
+exists in the Vite dev server; production builds contain no proxy and no showcase.
 
 The showcase is gated by `import.meta.env.DEV` in `src/main.tsx`. Production builds
 drop that branch and the lazily imported showcase chunk.
@@ -182,11 +225,19 @@ drop that branch and the lazily imported showcase chunk.
 | Showcase chunk fails to load (dev) | Error logged, falls back to the game `App` |
 | Non-numeric seed in the showcase | Input reverts to the current seed |
 | Invalid real-elevation payload (NoData, wrong sample count, bad coordinates…) | `MarsTerrainDataError` listing every issue; no map is built |
+| Terrain response is not JSON, or is for a different seed | `MarsTerrainDataError`; no map is built |
+| Backend unreachable (fetch rejects) | `MarsTerrainRequestError` with `status: null` |
+| Backend answers non-2xx (the dev proxy answers 500 when the Go server is down) | `MarsTerrainRequestError` with that `status` |
+| Seed outside [0, 2³²) passed to `fetchMarsTerrain` | `RangeError`; no request is sent |
+| Any Real Mars failure in the showcase | Stage stays empty; the panel shows the error (with a hint to start the Go server on localhost:8080 for unreachable/5xx) and a Retry button; details are logged to the console |
+| Seed, source or view changes while a request is pending | The request is aborted and its result ignored |
 | `createReliefMap` given `elevation` whose sample count is not `(cols + 1) × (rows + 1)` | `RangeError`; no map is built |
 
 ## 9. Security Considerations
 
-No user data, credentials or network access are involved.
+No user data or credentials are involved. The only network access is the
+unauthenticated, read-only terrain route, called from the development showcase. Its
+response is untrusted input and is fully validated before use.
 
 ## 10. Performance Considerations
 
@@ -222,7 +273,11 @@ so Bun and Node globals stay out of browser code. Fixtures in
 - true-scale rendering and determinism of real-elevation maps;
 - coordinate conversions: the 0°/360° meridian both ways, high latitudes, polar
   rejection and invalid inputs;
-- the renderer importing no terrain source.
+- the renderer importing no terrain source;
+- fetching real terrain with a stubbed `fetch` (`marsTerrainApi.test.ts`): the request
+  path, a successful payload converting to an unclassified map with its provenance,
+  contract violations, non-JSON bodies, a seed mismatch, network failures, HTTP error
+  statuses, aborts and out-of-range seeds.
 
 ```bash
 bun x tsc --noEmit

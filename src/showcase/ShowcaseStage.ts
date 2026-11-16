@@ -9,13 +9,20 @@ import { buildTerrainLayerView } from './terrainLayerView'
 import type { CameraPreset, DebugState, ShowcaseContent, StageStats, ViewMode } from './types'
 
 /**
- * One content builder per view; adding a view means adding an entry here.
- * The stage picks the terrain source; the view renders whatever map it gets.
+ * One seed-driven content builder per view; adding a view means adding an
+ * entry here. Maps from other sources (real Mars elevation) arrive already
+ * built through `ShowcaseStage.loadMap`; the view renders whatever map it gets.
  */
 const VIEW_BUILDERS: Record<ViewMode, (seed: number) => ShowcaseContent> = {
   terrain: (seed) => buildTerrainLayerView(generateReliefMap(seed)),
   assets: buildAssetGallery,
 }
+
+/**
+ * Content the camera is framed for. Real elevation is drawn at true scale, so
+ * its bounds differ from procedural terrain and switching between them reframes.
+ */
+type Framing = ViewMode | 'real-terrain'
 
 /**
  * Camera directions (from target) and how much of the viewport the projected
@@ -101,7 +108,8 @@ export class ShowcaseStage {
   private readonly resizeObserver: ResizeObserver
   private readonly timer = new THREE.Timer()
   private content: ShowcaseContent | null = null
-  private loadedView: ViewMode | null = null
+  /** What the camera was last framed for; reframing only happens when this changes. */
+  private framedFor: Framing | null = null
   private updaters: ((time: number) => void)[] = []
   private debug: DebugState = { mode: 'terrain', grid: false, values: false }
   private preset: CameraPreset = 'iso'
@@ -109,6 +117,8 @@ export class ShowcaseStage {
   private readonly viewTarget = new THREE.Vector3(Infinity, 0, 0)
   private viewDistance = 0
   private buildMs = 0
+  /** Whether the last rendered frame drew the current content, so the renderer's counters describe it. */
+  private contentRendered = false
   private fps = 0
 
   constructor(container: HTMLElement) {
@@ -160,43 +170,36 @@ export class ShowcaseStage {
   }
 
   getStats(): StageStats {
+    const fps = Math.round(this.fps)
+    if (!this.content || !this.contentRendered) return { fps, content: null }
     const { render } = this.renderer.info
     return {
-      fps: Math.round(this.fps),
-      drawCalls: render.calls,
-      triangles: render.triangles,
-      buildMs: Math.round(this.buildMs),
-      info: this.content?.info ?? {},
+      fps,
+      content: {
+        drawCalls: render.calls,
+        triangles: render.triangles,
+        buildMs: Math.round(this.buildMs),
+        info: this.content.info ?? {},
+      },
     }
   }
 
   /**
-   * Builds and shows a view; the camera is only reframed when the view changes.
+   * Builds and shows a seed-driven view (procedural terrain or the asset gallery).
    * Returns the view's Layer −1 data, if it has any, for the debug UI.
    */
   load(view: ViewMode, seed: number): ReliefMap | null {
+    return this.present(view, () => VIEW_BUILDERS[view](seed))
+  }
+
+  /** Shows the terrain view for a map built elsewhere, such as real Mars elevation. */
+  loadMap(map: ReliefMap): ReliefMap | null {
+    return this.present(map.elevation ? 'real-terrain' : 'terrain', () => buildTerrainLayerView(map))
+  }
+
+  /** Removes the current content, so nothing stale stays on screen while new content is pending. */
+  clear(): void {
     this.clearContent()
-    const start = performance.now()
-    const content = VIEW_BUILDERS[view](seed)
-    this.buildMs = performance.now() - start
-    this.content = content
-    this.scene.add(content.root)
-    content.applyDebug?.(this.debug)
-
-    this.updaters = []
-    content.root.traverse((object) => {
-      if (typeof object.userData.update === 'function') this.updaters.push(object.userData.update)
-    })
-
-    this.shadowCatcher.position.y = content.floorY - SHADOW_CATCHER.offset
-    const sphere = content.bounds.getBoundingSphere(new THREE.Sphere())
-    this.sceneRadius = sphere.radius
-    this.fitSun(sphere.center, sphere.radius)
-    if (view !== this.loadedView) this.setCameraPreset(this.preset)
-    this.loadedView = view
-    // Force the per-view camera/shadow refresh on the next frame.
-    this.viewTarget.set(Infinity, 0, 0)
-    return content.reliefMap ?? null
   }
 
   setDebug(debug: DebugState): void {
@@ -290,6 +293,35 @@ export class ShowcaseStage {
     this.labelRenderer.domElement.remove()
   }
 
+  /**
+   * Swaps in freshly built content. The camera is only reframed when the
+   * framing changes, so successive seeds can be compared from the same viewpoint.
+   */
+  private present(framing: Framing, build: () => ShowcaseContent): ReliefMap | null {
+    this.clearContent()
+    const start = performance.now()
+    const content = build()
+    this.buildMs = performance.now() - start
+    this.content = content
+    this.scene.add(content.root)
+    content.applyDebug?.(this.debug)
+
+    this.updaters = []
+    content.root.traverse((object) => {
+      if (typeof object.userData.update === 'function') this.updaters.push(object.userData.update)
+    })
+
+    this.shadowCatcher.position.y = content.floorY - SHADOW_CATCHER.offset
+    const sphere = content.bounds.getBoundingSphere(new THREE.Sphere())
+    this.sceneRadius = sphere.radius
+    this.fitSun(sphere.center, sphere.radius)
+    if (framing !== this.framedFor) this.setCameraPreset(this.preset)
+    this.framedFor = framing
+    // Force the per-view camera/shadow refresh on the next frame.
+    this.viewTarget.set(Infinity, 0, 0)
+    return content.reliefMap ?? null
+  }
+
   private clearContent(): void {
     if (!this.content) return
     const { root } = this.content
@@ -299,6 +331,7 @@ export class ShowcaseStage {
     this.scene.remove(root)
     disposeObject(root)
     this.content = null
+    this.contentRendered = false
     this.updaters = []
   }
 
@@ -357,6 +390,7 @@ export class ShowcaseStage {
     this.updateViewDependent()
     this.renderer.info.reset()
     this.renderer.render(this.scene, this.camera)
+    this.contentRendered = this.content !== null
     this.labelRenderer.render(this.scene, this.camera)
   }
 }

@@ -201,9 +201,11 @@ export function buildTerrainLayerView(map: ReliefMap): ShowcaseContent {
     bounds,
     floorY: -SKIRT_DEPTH,
     reliefMap: map,
-    info: {
-      deposits: MINERAL_FEATURES.map((kind) => `${kind} ${placedMinerals[kind]}`).join(' · '),
-    },
+    // Unclassified maps (real elevation by default) are never dressed, so they have no deposits to count.
+    info:
+      map.classification === 'none'
+        ? {}
+        : { deposits: MINERAL_FEATURES.map((kind) => `${kind} ${placedMinerals[kind]}`).join(' · ') },
     applyDebug(debug: DebugState) {
       mode = debug.mode
       const data = mode === 'data'
