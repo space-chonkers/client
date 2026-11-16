@@ -46,9 +46,6 @@ export default function App() {
         <PlayerSandboxView />
         {ongoingHazard && <HazardOngoingLabel hazard={ongoingHazard} />}
         {warningHazard && <HazardAlertBanner hazard={warningHazard} onClose={closeWarning} />}
-        <button type="button" className="chunky-button mission-screen__back" onClick={goHome}>
-          Back to home
-        </button>
       </main>
     )
   }

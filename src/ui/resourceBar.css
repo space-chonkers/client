@@ -13,12 +13,12 @@
   flex-direction: column;
   gap: 8px;
   min-width: 220px;
-  padding: 12px 14px;
-  background: rgba(16, 22, 34, 0.88);
-  border: 1px solid #334155;
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
+  padding: var(--hud-panel-padding);
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-panel-border);
+  border-radius: var(--hud-panel-radius);
+  box-shadow: var(--hud-panel-shadow);
+  backdrop-filter: var(--hud-panel-blur);
   pointer-events: auto;
 }
 
@@ -47,7 +47,7 @@
 .resource-bar__value {
   font-size: 0.95rem;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--hud-text);
   text-align: right;
   font-variant-numeric: tabular-nums;
   user-select: none;
