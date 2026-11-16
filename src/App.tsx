@@ -43,8 +43,9 @@ export default function App() {
     const { warningHazard, ongoingHazard, closeWarning } = hazardAlert
     return (
       <main className="game-client mission-screen">
-        <PlayerSandboxView />
-        {ongoingHazard && <HazardOngoingLabel hazard={ongoingHazard} />}
+        <PlayerSandboxView
+          topRightStatus={ongoingHazard && <HazardOngoingLabel hazard={ongoingHazard} />}
+        />
         {warningHazard && <HazardAlertBanner hazard={warningHazard} onClose={closeWarning} />}
         <button type="button" className="chunky-button mission-screen__back" onClick={goHome}>
           Back to home

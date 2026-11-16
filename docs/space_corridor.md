@@ -43,6 +43,8 @@ src/
 |---|---|
 | `SpaceCorridor` | Standalone Three.js `WebGLRenderer` preview component that displays and rotates requested corridor wall variants. |
 | `CorridorGrid` | Manages placed Layer `0` corridor tiles in a Three.js scene and updates adjacent neighbor walls automatically. |
+| `CorridorGrid.getOccupiedTiles()` | Returns a copied, read-only snapshot of occupied tiles as `{ gridX, gridZ, kind }` (local coordinates). |
+| `CorridorGrid.onOccupancyChange(listener)` | Calls `listener` after tiles are added (`placeTile`, `loadConstructions`) or removed (`removeTile`); rejected placements and removals do not notify. Returns an unsubscribe function; `dispose()` clears all listeners. Used by the mission minimap (see `docs/mission_minimap.md`). |
 
 ### Utilities
 
@@ -88,7 +90,7 @@ src/
 - Static constants (`MAP_GRID_WIDTH`, `MAP_GRID_HEIGHT`, `SPATIAL_LAYERS`, `CORRIDOR_PALETTE`, `INITIAL_CORRIDOR_TILES`) and interactive sandbox keyboard input (`KeyE`, `Space`).
 
 ### State Management
-- `CorridorGrid` stores active tile meshes in an internal `Map<string, THREE.Group>` keyed by `"x,z"`.
+- `CorridorGrid` stores each tile's `kind` and mesh group in an internal `Map` keyed by `"x,z"`, and is the source of truth for sandbox construction occupancy.
 
 ## 6. API and Integrations
 
@@ -145,3 +147,4 @@ bun run build
 |---|---|---|
 | 2026-11-14 | 1.0.0 | Initial documentation of `SpaceCorridor.tsx` |
 | 2026-11-15 | 1.1.0 | Added `CorridorGrid` auto-tiling manager and `PlayerSandbox` integration |
+| 2026-11-15 | 1.2.0 | Added read-only occupancy snapshot and change listener for the mission minimap |

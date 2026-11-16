@@ -7,3 +7,16 @@
   height: 100%;
   overflow: hidden;
 }
+
+/* Top-right HUD column: the mission minimap with transient status (hazard label) below it. */
+.player-sandbox__top-right {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: none;
+}
