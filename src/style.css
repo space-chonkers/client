@@ -36,13 +36,7 @@ body,
   display: block;
 }
 
-/* Screen after choosing a mode: the player sandbox with a button back home */
+/* Screen after choosing a mode: the player sandbox */
 .mission-screen {
   position: relative;
-}
-
-.mission-screen__back {
-  position: absolute;
-  top: 16px;
-  left: 16px;
 }

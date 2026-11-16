@@ -1,0 +1,146 @@
+/*
+ * Hazard warning banner. Shares the HUD panel tokens (`--hud-panel-*`,
+ * theme.css) with the resource bar, action buttons and "in progress" label.
+ * The top strip and the title take the hazard's icon color (`--hazard-accent`,
+ * set inline from ICON_COLORS).
+ */
+.hazard-alert-overlay {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  z-index: 20;
+  width: min(560px, calc(100% - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.hazard-alert {
+  overflow: hidden;
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-panel-border);
+  border-radius: var(--hud-panel-radius);
+  box-shadow: var(--hud-panel-shadow);
+  backdrop-filter: var(--hud-panel-blur);
+  color: var(--hud-text);
+  pointer-events: auto;
+  animation: hazard-alert-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Thin accent strip across the top */
+.hazard-alert__top-strip {
+  height: 4px;
+  background: var(--hazard-accent, var(--coral));
+}
+
+.hazard-alert__body {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: var(--hud-panel-padding);
+}
+
+.hazard-alert__icon {
+  display: flex;
+  animation: hazard-icon-wobble 1.4s ease-in-out infinite;
+}
+
+.hazard-alert__text {
+  min-width: 0;
+}
+
+.hazard-alert__title {
+  margin: 0;
+  color: var(--hazard-accent, var(--hud-text));
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hazard-alert__description {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* Flat X button, same hover/press highlight as the action button rows */
+.hazard-alert__close {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--hud-text);
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.hazard-alert__close .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.hazard-alert__close:hover {
+  background: rgba(248, 250, 252, 0.08);
+}
+
+.hazard-alert__close:active {
+  background: rgba(248, 250, 252, 0.14);
+}
+
+.hazard-alert__close:focus-visible {
+  outline: 2px solid var(--hud-text);
+  outline-offset: 2px;
+}
+
+@keyframes hazard-alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.92);
+  }
+}
+
+@keyframes hazard-icon-wobble {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+/* The resource bar and the "in progress" label sit at the top on small screens */
+@media (max-width: 900px) {
+  .hazard-alert-overlay {
+    top: auto;
+    bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hazard-alert__body {
+    gap: 10px;
+  }
+
+  .hazard-alert__description {
+    font-size: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hazard-alert,
+  .hazard-alert__icon {
+    animation: none;
+  }
+
+  .hazard-alert__close {
+    transition: none;
+  }
+}
