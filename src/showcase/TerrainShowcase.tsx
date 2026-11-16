@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { MarsTerrainRequestError, fetchMarsTerrain } from '../terrain-kit/marsTerrainApi'
 import { MarsTerrainDataError, createReliefMapFromMarsTerrain } from '../terrain-kit/marsTerrainContract'
+import { MARS_SCENERY, createMarsTerrainScenery, isMeasuredCell, measuredSamples } from '../terrain-kit/marsTerrainScenery'
 import type { ReliefMap, TerrainCell } from '../terrain-kit/reliefMap'
 import { ShowcaseStage } from './ShowcaseStage'
 import ReliefMinimap from './ReliefMinimap'
@@ -16,6 +17,12 @@ const SOURCES: { id: TerrainSource; label: string }[] = [
   { id: 'procedural', label: 'Procedural' },
   { id: 'mars', label: 'Real Mars' },
 ]
+/** Real Mars as measured (unclassified, footprint only) or as the mission draws it (game-art dressing, synthetic border). */
+const MARS_STYLES: { id: MarsStyle; label: string }[] = [
+  { id: 'raw', label: 'Raw HiRISE' },
+  { id: 'game', label: 'Game art' },
+]
+type MarsStyle = 'raw' | 'game'
 const RENDER_MODES: { id: RenderMode; label: string }[] = [
   { id: 'terrain', label: 'Terrain' },
   { id: 'relief', label: 'Relief' },
@@ -63,6 +70,7 @@ export default function TerrainShowcase() {
   const [seedDraft, setSeedDraft] = useState(String(DEFAULT_SEED))
   const [view, setView] = useState<ViewMode>('terrain')
   const [source, setSource] = useState<TerrainSource>('procedural')
+  const [marsStyle, setMarsStyle] = useState<MarsStyle>('raw')
   const [marsStatus, setMarsStatus] = useState<MarsTerrainStatus>(null)
   /** Bumped by the Retry button to refetch the same seed. */
   const [marsAttempt, setMarsAttempt] = useState(0)
@@ -104,7 +112,7 @@ export default function TerrainShowcase() {
       .then((data) => {
         if (controller.signal.aborted) return
         // Default options: real terrain stays unclassified and undressed.
-        setReliefMap(stage.loadMap(createReliefMapFromMarsTerrain(data)))
+        setReliefMap(stage.loadMap(marsStyle === 'game' ? createMarsTerrainScenery(data) : createReliefMapFromMarsTerrain(data)))
         setMarsStatus(null)
       })
       .catch((error: unknown) => {
@@ -113,7 +121,7 @@ export default function TerrainShowcase() {
         setMarsStatus({ kind: 'error', message: describeMarsTerrainError(error) })
       })
     return () => controller.abort()
-  }, [view, seed, source, marsAttempt])
+  }, [view, seed, source, marsStyle, marsAttempt])
 
   useEffect(() => {
     stageRef.current?.setDebug({ mode, grid: showGrid, values: showValues })
@@ -141,8 +149,9 @@ export default function TerrainShowcase() {
   const realElevation = reliefMap?.elevation
   const elevationRange = useMemo(() => {
     if (!realElevation) return null
-    const { samplesMeters } = realElevation
-    return { min: Math.min(...samplesMeters), max: Math.max(...samplesMeters) }
+    // Measured samples only: the game-art map's border is synthetic.
+    const samples = measuredSamples(reliefMap!)
+    return { min: Math.min(...samples), max: Math.max(...samples) }
   }, [realElevation])
 
   return (
@@ -169,6 +178,16 @@ export default function TerrainShowcase() {
             </button>
           ))}
         </div>
+
+        {terrainView && source === 'mars' && (
+          <div className="showcase-row" role="group" aria-label="Real Mars appearance">
+            {MARS_STYLES.map(({ id, label }) => (
+              <button key={id} type="button" aria-pressed={marsStyle === id} onClick={() => setMarsStyle(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form className="showcase-row" onSubmit={submitSeed}>
           <label htmlFor="showcase-seed">Seed</label>
@@ -248,7 +267,11 @@ export default function TerrainShowcase() {
               <dt>Product</dt>
               <dd className="mars-product">{realElevation.geo.provenance.productId ?? 'not provided'}</dd>
             </dl>
-            <p className="mars-note">Unclassified: no geology or minerals.</p>
+            <p className="mars-note">
+              {realElevation.measuredFootprint
+                ? `Game-art dressing, not observations; the ${MARS_SCENERY.borderCells}-cell border is synthetic.`
+                : 'Unclassified: no geology or minerals.'}
+            </p>
             <details className="mars-details">
               <summary>Source details</summary>
               <p>
@@ -288,7 +311,9 @@ export default function TerrainShowcase() {
                       {hovered.region} · {hovered.geology} · {hovered.feature} ·{' '}
                     </>
                   )}
-                  {hovered.elevationMeters !== undefined && <>{formatMeters(hovered.elevationMeters)} · </>}
+                  {hovered.elevationMeters !== undefined && (
+                    <>{isMeasuredCell(reliefMap, hovered.col, hovered.row) ? formatMeters(hovered.elevationMeters) : 'synthetic border'} · </>
+                  )}
                   slope {hovered.slope.toFixed(2)} · curv {signed(hovered.curvature)}
                 </>
               ) : (

@@ -70,6 +70,12 @@ const SEDIMENT_MEAN = mean(COLORS.sediment)
 const LAKEBED_MEAN = mean(COLORS.lakebed)
 
 const _typeColor = new THREE.Color()
+/**
+ * Colour band index that stays valid for any height: real elevation is drawn at
+ * true scale and can sit far below the procedural range, where `%` alone would
+ * go negative. Identical to `%` for the non-negative indices procedural maps produce.
+ */
+const bandOf = <T,>(bands: readonly T[], band: number) => bands[((band % bands.length) + bands.length) % bands.length]
 
 function typeColor(type: SurfaceType, point: THREE.Vector3, faceRand: number, broad: number, exposure: number): THREE.Color {
   switch (type) {
@@ -83,7 +89,7 @@ function typeColor(type: SurfaceType, point: THREE.Vector3, faceRand: number, br
     case 'lakebed': {
       // Faint, broad bands: light-toned layered lake sediment.
       const band = Math.floor(point.y * 9 + broad * 1.5 + 100)
-      return _typeColor.copy(LAKEBED_MEAN).lerp(COLORS.lakebed[band % COLORS.lakebed.length], 0.2 + 0.8 * exposure)
+      return _typeColor.copy(LAKEBED_MEAN).lerp(bandOf(COLORS.lakebed, band), 0.2 + 0.8 * exposure)
     }
     case 'ejecta':
       return _typeColor.copy(COLORS.ejecta)
@@ -95,7 +101,7 @@ function typeColor(type: SurfaceType, point: THREE.Vector3, faceRand: number, br
     case 'sedimentary': {
       // Bands follow elevation contours, like eroded layered bedrock.
       const band = Math.floor(point.y * 14 + broad * 2 + 100)
-      return _typeColor.copy(SEDIMENT_MEAN).lerp(COLORS.sediment[band % COLORS.sediment.length], 0.15 + 0.85 * exposure)
+      return _typeColor.copy(SEDIMENT_MEAN).lerp(bandOf(COLORS.sediment, band), 0.15 + 0.85 * exposure)
     }
     case 'cracked':
       return _typeColor.copy(COLORS.cracked)
@@ -276,9 +282,6 @@ export function buildTerrain({ grid, field, seed, subdivisions = 3, skirtDepth =
   return { group, surface, chunks }
 }
 
-/** Name of the diorama side-wall mesh, so callers editing the surface can tell it apart from surface chunks. */
-export const TERRAIN_SKIRT_NAME = 'terrain-skirt'
-
 /** Absolute heights of the rock strata exposed on the diorama walls. */
 const STRATA_LEVELS = [0.42, 0.18, -0.1, -0.38, -0.68, -0.98]
 const TOPSOIL = 0.1
@@ -339,7 +342,7 @@ function createSkirt(
   builder.quad(a, b, c, d, color.copy(COLORS.skirt[5]).multiplyScalar(0.6), DOWN)
 
   const mesh = new THREE.Mesh(builder.build(), materials.matte())
-  mesh.name = TERRAIN_SKIRT_NAME
+  mesh.name = 'terrain-skirt'
   mesh.castShadow = true
   mesh.receiveShadow = true
   return mesh

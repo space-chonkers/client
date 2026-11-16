@@ -75,19 +75,25 @@ real elevation is the one that carries `map.elevation`.
 |---|---|---|---|
 | Procedural | `generateReliefMap(seed)` | Normalized relief through the terraced `RELIEF_HEIGHT` curve, plus procedural micro-relief | `procedural` |
 | Real elevation | `createReliefMapFromMarsTerrain(data)` | Measured metres at true scale, bilinear between cell corners | `none` by default; `procedural` only on request |
+| Real elevation, game scenery | `createMarsTerrainScenery(data)` | Measured metres in the `50×50` footprint, synthetic metres in a 20-cell border (`elevation.measuredFootprint`) | `procedural` (classified on local relief), as game art |
 
 `map.classification` says whether `geology`, `region` and `feature` were invented by
 the seeded classifier. With `none`, every cell is `unclassified` with feature `none`,
 the surface uses one neutral ground colour, and nothing is dressed (no formations,
 minerals or scattered rocks). With `procedural`, they are game decoration, never
-observations.
+observations. The mission uses the game scenery map (see
+[map_integration.md](map_integration.md)); the raw map is what the showcase shows as
+"Raw HiRISE".
 
 The showcase panel has a **Procedural / Real Mars** source selector (Layer −1 view only):
 
 - **Procedural:** `ShowcaseStage.load(view, seed)` builds the map from the seed (`VIEW_BUILDERS`).
-- **Real Mars:** `TerrainShowcase` fetches `fetchMarsTerrain(seed)`, converts it with
-  `createReliefMapFromMarsTerrain(data)` (default options, so the map stays
-  unclassified and undressed) and shows it with `ShowcaseStage.loadMap(map)`. The
+- **Real Mars:** `TerrainShowcase` fetches `fetchMarsTerrain(seed)`, converts it and
+  shows it with `ShowcaseStage.loadMap(map)`. A second toggle picks the appearance:
+  **Raw HiRISE** (`createReliefMapFromMarsTerrain(data)`: measured footprint only,
+  unclassified and undressed) or **Game art** (`createMarsTerrainScenery(data)`: the
+  mission's dressed map with its synthetic border; the elevation range still covers
+  measured samples only, and the inspector labels border cells "synthetic border"). The
   stage is cleared while the request is pending, so a previous map is never shown as
   the new seed's terrain. Changing seed, source or view aborts a pending request.
   The panel shows the map centre (planetocentric latitude, east longitude), the

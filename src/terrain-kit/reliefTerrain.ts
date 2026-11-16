@@ -42,6 +42,21 @@ export interface PlacementRecord {
   placed: boolean
 }
 
+/**
+ * A static prop baked into the dressing, in `root`-local coordinates. Its index
+ * is the `owner` of its vertices in the baked meshes' `userData.bakedParts`.
+ */
+export interface DressingProp {
+  /** Point the prop stands on. */
+  anchor: THREE.Vector3
+  /** Rendered surface height under the anchor when the prop was placed. */
+  groundY: number
+  /** Horizontal extent. */
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number }
+  /** Ground-hugging decal (crack network) rather than a solid object. */
+  decal: boolean
+}
+
 export interface ReliefTerrain {
   /** Surface chunks and skirt, plus baked assets and rock scatter. */
   root: THREE.Group
@@ -50,6 +65,8 @@ export interface ReliefTerrain {
   chunks: THREE.Mesh[]
   /** One record per cell feature that needed placement (formations, rocks, minerals). */
   placements: PlacementRecord[]
+  /** Every baked static prop (placed features and crack decals), for later edits such as construction. */
+  props: DressingProp[]
 }
 
 export interface ReliefTerrainOptions {
@@ -89,12 +106,12 @@ export function createReliefTerrain({
   const span = (chunkCells > 0 ? chunkCells : Math.max(map.cols, map.rows)) * cellSize
   const chunkKey = (x: number, z: number) =>
     `${Math.floor((x + (map.cols * cellSize) / 2) / span)},${Math.floor((z + (map.rows * cellSize) / 2) / span)}`
-  const { dressing, placements, tints } = dressTerrain(map, grid, surface, chunkKey)
+  const { dressing, placements, tints, props } = dressTerrain(map, grid, surface, chunkKey)
   tintSurface(chunks, tints)
   const root = new THREE.Group()
   root.name = 'layer-1-terrain'
   root.add(terrain, dressing)
-  return { root, surface, chunks, placements }
+  return { root, surface, chunks, placements, props }
 }
 
 /**
@@ -230,6 +247,17 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
   const talus: { x: number; z: number; r: number }[] = []
   const tints: GroundTint[] = []
   const placements: PlacementRecord[] = []
+  /** One entry per `props` child, in the same order (see `DressingProp`). */
+  const propRecords: DressingProp[] = []
+  const recordProp = (object: THREE.Object3D, anchor: THREE.Vector3, decal: boolean) => {
+    const box = new THREE.Box3().setFromObject(object)
+    propRecords.push({
+      anchor: anchor.clone(),
+      groundY: surface.heightAt(anchor.x, anchor.z),
+      bounds: { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z },
+      decal,
+    })
+  }
   const wind = prevailingWind(map.seed)
 
   for (const cell of map.cells) {
@@ -254,9 +282,12 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
     let tint: Omit<GroundTint, 'x' | 'z'> | null = null
     let talusRadius = 0
     switch (cell.feature) {
-      case 'cracks':
-        props.add(createCrackDecals({ seed, heightAt: surface.heightAt, center: { x: center.x, z: center.z }, ...FEATURE_PLACEMENT.cracks }))
+      case 'cracks': {
+        const decals = createCrackDecals({ seed, heightAt: surface.heightAt, center: { x: center.x, z: center.z }, ...FEATURE_PLACEMENT.cracks })
+        props.add(decals)
+        recordProp(decals, center, true)
         continue
+      }
       case 'pillar': {
         const { height, windJitter } = FEATURE_PLACEMENT.pillar
         object = createRockPillar({ seed, height: height.base + height.perLift * lift + rng.range(0, height.jitter) })
@@ -348,6 +379,7 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
       continue
     }
     props.add(object)
+    recordProp(object, object.position, false)
     const { x, z } = object.position
     keepOut.push({ x, z, r: footprint + PLACEMENT_SEARCH.keepOutMargin })
     if (tint) tints.push({ x, z, ...tint })
@@ -376,7 +408,7 @@ function dressTerrain(map: ReliefMap, grid: GridSpec, surface: TerrainSurface, c
         ),
     }),
   )
-  return { dressing, placements, tints }
+  return { dressing, placements, tints, props: propRecords }
 }
 
 /**

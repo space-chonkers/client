@@ -42,8 +42,9 @@ export function worldVertices(root: THREE.Object3D): { mesh: THREE.Mesh; points:
 }
 
 /**
- * FNV-1a over every vertex position (local, rounded to 1e-4), instance matrix
- * and the root transform: a fingerprint of the rendered geometry.
+ * FNV-1a over every vertex position and vertex colour (rounded to 1e-4),
+ * instance matrix and object transform: a fingerprint of the rendered
+ * geometry and its colouring.
  */
 export function geometryHash(root: THREE.Object3D): string {
   let hash = 0x811c9dc5
@@ -56,9 +57,14 @@ export function geometryHash(root: THREE.Object3D): string {
     object.matrixWorld.elements.forEach(mix)
     if (object instanceof THREE.InstancedMesh) {
       object.instanceMatrix.array.forEach(mix)
+      object.instanceColor?.array.forEach(mix)
       return
     }
-    if (object instanceof THREE.Mesh) (object.geometry.getAttribute('position').array as Float32Array).forEach(mix)
+    if (object instanceof THREE.Mesh) {
+      ;(object.geometry.getAttribute('position').array as Float32Array).forEach(mix)
+      const color = object.geometry.getAttribute('color')
+      if (color) (color.array as Float32Array).forEach(mix)
+    }
   })
   return hash.toString(16).padStart(8, '0')
 }
