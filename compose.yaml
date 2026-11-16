@@ -3,8 +3,8 @@ services:
     build:
       context: .
       args:
-        # Backend origin for real Mars terrain; leave unset for procedural terrain only.
-        VITE_MARS_TERRAIN_API_URL: ${VITE_MARS_TERRAIN_API_URL:-}
+        # Real Mars terrain: `/` uses nginx.conf's same-origin proxy to the Go server; set it empty for procedural only.
+        VITE_MARS_TERRAIN_API_URL: ${VITE_MARS_TERRAIN_API_URL-/}
         VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8081/ws}
     ports:
       - "5173:80"

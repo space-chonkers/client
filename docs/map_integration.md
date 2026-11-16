@@ -111,7 +111,7 @@ Real terrain is **measured shape + procedural game art + synthetic surroundings*
 
 ## 6. API and Integrations
 
-`GET {VITE_MARS_TERRAIN_API_URL}/v1/mars-terrain/{seed}` once per mission start (see [mars_terrain_contract.md](mars_terrain_contract.md)). No WebSocket, matchmaking or match-state integration.
+`GET {VITE_MARS_TERRAIN_API_URL}/v1/mars-terrain/{seed}` once per mission start (see [mars_terrain_contract.md](mars_terrain_contract.md)). It is independent of the multiplayer WebSocket session: the server does not assign terrain seeds yet.
 
 ## 7. Configuration and Environment Variables
 
@@ -120,7 +120,8 @@ Real terrain is **measured shape + procedural game art + synthetic surroundings*
 | `VITE_MARS_TERRAIN_API_URL` | Build time (`.env`, Docker build arg, `compose.yaml`) | Backend origin serving the terrain route, e.g. `https://api.example`, or `/` if a reverse proxy routes `/v1/mars-terrain` on the client's own origin. Empty in production: procedural terrain only. |
 
 - **Development:** nothing to set. `vite.config.ts` proxies `/v1/mars-terrain` to the Go server on `localhost:8081`.
-- **Production:** the client is static files behind Nginx (`nginx.conf`), which has no API proxy. Build with the backend origin (`docker build --build-arg VITE_MARS_TERRAIN_API_URL=https://… .` or `VITE_MARS_TERRAIN_API_URL=https://… docker compose build`). The request is a simple cross-origin GET (no preflight), so the Go server's `ALLOWED_ORIGINS` must include the client's origin (its default is `*`). The value is baked into the bundle; changing it needs a rebuild.
+- **Production (Docker):** Nginx (`nginx.conf`) proxies `/v1/mars-terrain/` to the Go server (`http://server:8080`), next to its `/ws` proxy, and `compose.yaml` builds with `VITE_MARS_TERRAIN_API_URL=/` (same origin) by default. Set it empty (`VITE_MARS_TERRAIN_API_URL= docker compose build`) for procedural terrain only.
+- **Production (other hosting):** build with the backend origin (`docker build --build-arg VITE_MARS_TERRAIN_API_URL=https://… .`). The request is then a simple cross-origin GET (no preflight), so the Go server's `ALLOWED_ORIGINS` must include the client's origin (its default is `*`). A plain `docker build` without the argument stays procedural. The value is baked into the bundle; changing it needs a rebuild.
 
 ## 8. Error Handling
 
@@ -176,7 +177,7 @@ bun run build
 - Russell crater windows are more densely dressed (about twice procedural) because their measured surface has a lot of fine local relief.
 - When construction hides a prop, its baked ground tint (contact shadow, mineral halo) stays on the ground.
 - Procedural maps use a 12–13-cell border (`75×75`, from main); at the very edge the camera may still glimpse past it.
-- Production needs `VITE_MARS_TERRAIN_API_URL` at build time and a backend reachable from players' browsers; there is no runtime configuration or Nginx proxy.
+- Production needs `VITE_MARS_TERRAIN_API_URL` at build time (Compose defaults it to `/`, using the Nginx proxy); there is no runtime configuration.
 
 ## 14. Future Improvements
 
