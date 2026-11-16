@@ -23,6 +23,13 @@ export interface CorridorOrientation {
   rotationY: number
 }
 
+/** Read-only view of an occupied tile in local grid coordinates. */
+export interface OccupiedTile {
+  readonly gridX: number
+  readonly gridZ: number
+  readonly kind: ConstructionKind
+}
+
 interface StoredTile {
   kind: ConstructionKind
   group: THREE.Group
@@ -115,6 +122,11 @@ function toTileKey(gridX: number, gridZ: number): string {
   return `${Math.round(gridX)},${Math.round(gridZ)}`
 }
 
+function fromTileKey(key: string): { gridX: number; gridZ: number } {
+  const [gridX, gridZ] = key.split(',').map(Number)
+  return { gridX, gridZ }
+}
+
 function moveToward(current: number, target: number, maxStep: number): number {
   const diff = target - current
   if (Math.abs(diff) <= maxStep) return target
@@ -142,6 +154,7 @@ function disposeGroup(group: THREE.Group): void {
 export class CorridorGrid {
   readonly object = new THREE.Group()
   private readonly tiles = new Map<string, StoredTile>()
+  private readonly occupancyListeners = new Set<() => void>()
   private readonly plinths = new Map<string, THREE.Mesh>()
   private readonly plinthGeo = new THREE.BoxGeometry(0.96, PLINTH_HEIGHT, 0.96)
   private readonly plinthMat = new THREE.MeshStandardMaterial({
@@ -163,6 +176,20 @@ export class CorridorGrid {
     return this.tiles.get(toTileKey(gridX, gridZ))?.kind
   }
 
+  /** Snapshot of every occupied tile; later changes do not affect the returned array. */
+  getOccupiedTiles(): OccupiedTile[] {
+    return Array.from(this.tiles, ([key, tile]) => ({ ...fromTileKey(key), kind: tile.kind }))
+  }
+
+  /**
+   * Calls `listener` after tiles are added or removed (never for rejected
+   * placements or removals). Returns a function that unsubscribes it.
+   */
+  onOccupancyChange(listener: () => void): () => void {
+    this.occupancyListeners.add(listener)
+    return () => this.occupancyListeners.delete(listener)
+  }
+
   /** Places a corridor tile at (gridX, gridZ) and updates adjacent neighbor walls. */
   placeTile(
     gridX: number,
@@ -176,6 +203,7 @@ export class CorridorGrid {
 
     this.tiles.set(key, { kind, group: new THREE.Group() })
     this.refreshTileAndNeighbors(x, z)
+    this.notifyOccupancyChange()
     return true
   }
 
@@ -204,6 +232,7 @@ export class CorridorGrid {
     for (const [x, z] of added) {
       this.rebuildTileMesh(x, z)
     }
+    if (added.length > 0) this.notifyOccupancyChange()
   }
 
   /** Removes a corridor tile at (gridX, gridZ) and updates adjacent neighbor walls. */
@@ -227,6 +256,7 @@ export class CorridorGrid {
     for (const { dx, dz } of NEIGHBOR_OFFSETS) {
       this.rebuildTileMesh(x + dx, z + dz)
     }
+    this.notifyOccupancyChange()
     return true
   }
 
@@ -341,6 +371,11 @@ export class CorridorGrid {
       this.object.remove(plinth)
     }
     this.tiles.clear()
+    this.occupancyListeners.clear()
+  }
+
+  private notifyOccupancyChange(): void {
+    for (const listener of this.occupancyListeners) listener()
     this.plinths.clear()
     this.plinthGeo.dispose()
     this.plinthMat.dispose()

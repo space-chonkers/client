@@ -1,13 +1,10 @@
 /*
- * Top-right "hazard in progress" label. Shares the HUD panel tokens
- * (`--hud-panel-*`, theme.css) with the resource bar. The hazard's icon color
- * (`--hazard-accent`) highlights its title.
+ * "Hazard in progress" label. Same look as the hazard banner: cream panel, ink
+ * border and hard ink shadow, with the hazard's icon color (`--hazard-accent`)
+ * on the icon ring. Positioned by its container: the mission HUD stacks it in
+ * the top-right column, under the minimap.
  */
 .hazard-ongoing {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 20;
   display: flex;
   align-items: center;
   gap: 10px;

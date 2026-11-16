@@ -32,7 +32,7 @@ src/
 └── ui/
     ├── HazardAlertBanner.tsx      # Warning banner with X button
     ├── hazardAlertBanner.css
-    ├── HazardOngoingLabel.tsx     # Top-right "in progress" label
+    ├── HazardOngoingLabel.tsx     # "In progress" label (stacked under the minimap)
     └── hazardOngoingLabel.css
 ```
 
@@ -46,8 +46,8 @@ src/
 |---|---|
 | `getHazardByCode(code)` | Returns the `HazardDefinition` for codes 1–4, `null` for 0 or unknown codes. |
 | `useHazardAlert()` | Returns `{ warningHazard, ongoingHazard, receiveHazardCode, closeWarning, resolveOngoingHazard, dismiss }`. Both hazards are a `HazardDefinition` or `null`. |
-| `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon, title, description and X button. |
-| `HazardOngoingLabel` | Prop `hazard`. Top-right panel: icon + "<Hazard> in progress". |
+| `HazardAlertBanner` | Props `hazard` and `onClose`. Top accent strip, icon badge, title, description and X button. |
+| `HazardOngoingLabel` | Prop `hazard`. Pill: icon + "<Hazard> in progress". It has no position of its own: `App` passes it to `PlayerSandboxView` as `topRightStatus`, which stacks it under the mission minimap in the top-right HUD column. |
 | `AlarmSound` | `play()` (siren: 6 low-passed square beeps alternating 880 / 660 Hz, ~1.5 s), `stop()`. |
 | `useSimulatedHazardTicks(enabled, onHazardCode)` | Temporary. While `enabled`, calls `onHazardCode` every 5 s with `0` (70%) or a random hazard code 1–4 (30%). Clears its interval when disabled or unmounted. |
 
@@ -67,7 +67,8 @@ src/
 - The banner shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with the other HUD panels. A thin 4 px top strip and the uppercase title use the hazard's icon color (`ICON_COLORS[hazard.icon]`, passed as `--hazard-accent`); the description stays light text. The 40 px icon wobbles, and the X is a flat button with a light hover highlight (no `.chunky-button`).
 - The "in progress" label shares the HUD panel tokens (`--hud-panel-*`, `--hud-text` in `theme.css`) with `ResourceBar` and `ActionButtons`: translucent dark panel with blur, slate border, soft shadow, 28 px icon. The hazard's title is shown in its icon color (`--hazard-accent`).
 - Screen readers: the banner's title and description are in a `role="alert"` region; the X button is labelled "Close <Hazard> warning"; the "in progress" label is a `role="status"`.
-- Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the "in progress" label.
+- Banner position: top center; below 900 px wide it moves to the bottom so it doesn't cover the resource bar and the back button.
+- Above 900 px the mission minimap only grows into the space right of the 560 px banner, so they never overlap (see `docs/mission_minimap.md`).
 - `prefers-reduced-motion` disables the animations.
 
 ## 5. Testing
